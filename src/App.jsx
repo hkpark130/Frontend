@@ -8,9 +8,10 @@ import DeviceApplication from './pages/DeviceApplication'
 import Sidebar from './components/layout/Sidebar'
 import Header from './components/layout/Header'
 import ApprovalList from './pages/ApprovalList'
+
 import ApprovalDetail from './pages/ApprovalDetail'
-
-
+import RegisterDevice from './pages/RegisterDevice'
+import EditDevice from './pages/EditDevice'
 
 export default function App() {
   return (
@@ -29,8 +30,8 @@ export default function App() {
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/approvals" element={<ApprovalList />} />
               <Route path="/admin/approvals/:approvalId" element={<ApprovalDetail />} />
-              <Route path="/admin/register" element={<div className="card">장비 등록</div>} />
-              <Route path="/admin/edit" element={<div className="card">장비 편집</div>} />
+              <Route path="/admin/register" element={<RegisterDevice />} />
+              <Route path="/admin/edit" element={<EditDevice />} />
               <Route path="/admin/bulk" element={<div className="card">장비 일괄 등록</div>} />
               <Route path="/admin/item" element={<div className="card">품목 등록</div>} />
               <Route path="/admin/project" element={<div className="card">프로젝트 편집</div>} />
