@@ -4,8 +4,11 @@ import Dashboard from './pages/Dashboard'
 import DeviceList from './pages/DeviceList'
 import Admin from './pages/Admin'
 import MyPage from './pages/MyPage'
+import DeviceApplication from './pages/DeviceApplication'
 import Sidebar from './components/layout/Sidebar'
 import Header from './components/layout/Header'
+import ApprovalList from './pages/ApprovalList'
+import ApprovalDetail from './pages/ApprovalDetail'
 
 
 
@@ -21,8 +24,11 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               {/* 가용장비 리스트 */}
               <Route path="/device/list" element={<DeviceList />} />
+              <Route path="/device/:deviceId/apply" element={<DeviceApplication />} />
               {/* 관리자 메뉴 */}
               <Route path="/admin" element={<Admin />} />
+              <Route path="/admin/approvals" element={<ApprovalList />} />
+              <Route path="/admin/approvals/:approvalId" element={<ApprovalDetail />} />
               <Route path="/admin/register" element={<div className="card">장비 등록</div>} />
               <Route path="/admin/edit" element={<div className="card">장비 편집</div>} />
               <Route path="/admin/bulk" element={<div className="card">장비 일괄 등록</div>} />

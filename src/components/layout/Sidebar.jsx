@@ -37,6 +37,7 @@ export default function Sidebar() {
               <NavLink to="/admin/item" className={submenuClass}>품목 등록</NavLink>
               <NavLink to="/admin/project" className={submenuClass}>프로젝트 편집</NavLink>
               <NavLink to="/admin/dept" className={submenuClass}>부서 편집</NavLink>
+              <NavLink to="/admin/approvals" className={submenuClass}>결재 관리</NavLink>
               <div className="menu-toggle" style={{ padding: '6px 8px' }} onClick={() => setLedgerOpen(!ledgerOpen)}>
                 <span>장비 관리 대장</span>
                 <span style={{ marginLeft: 'auto', opacity: .8 }}>{ledgerOpen ? '▾' : '▸'}</span>
@@ -47,7 +48,6 @@ export default function Sidebar() {
                   <NavLink to="/admin/ledger/disposal" className={submenuClass}>폐기 장비 리스트</NavLink>
                 </div>
               )}
-              <NavLink to="/admin/map" className={submenuClass}>장비 지도</NavLink>
               <NavLink to="/admin/users" className={submenuClass}>유저 관리</NavLink>
             </div>
           )}
