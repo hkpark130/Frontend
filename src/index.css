@@ -371,6 +371,47 @@ tr:hover {
   background-color: #1d4ed8;
 }
 
+.secondary {
+  background-color: #f3f4f6;
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.secondary:hover {
+  background-color: #e5e7eb;
+}
+
+.secondary:disabled,
+.danger:disabled,
+.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.table-link {
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.table-link:hover {
+  color: #1d4ed8;
+}
+
+.danger {
+  background-color: #dc2626;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.danger:hover {
+  background-color: #b91c1c;
+}
+
 .error {
   color: #dc2626;
   margin-top: 8px;
