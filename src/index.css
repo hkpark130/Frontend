@@ -12,7 +12,7 @@
 }
 
 html, body, #root { width: 100%; height: 100%; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background:#fff; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background:#fff; overflow:hidden; }
 
 a { color: #1d4ed8; text-decoration: none; }
 a:hover { color: #6fff62; }
@@ -27,11 +27,20 @@ button {
   cursor: pointer;
 }
 button.outline { background:#fff; color:#111827; border-color:#111827; }
+button.danger {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+button.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
 
 /* =====================
    Layout
    ===================== */
-.layout { display: flex; width: 100%; min-height: 100vh; }
+.layout { display: flex; width: 100%; height: 100vh; overflow: hidden; }
 
 /* Make main area fill remaining space next to sidebar */
 .main {
@@ -39,6 +48,8 @@ button.outline { background:#fff; color:#111827; border-color:#111827; }
   min-width: 0; /* prevent overflow from child widths */
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .menu-divider {
@@ -54,6 +65,14 @@ button.outline { background:#fff; color:#111827; border-color:#111827; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* Internet Explorer 10+ */
+}
+.sidebar::-webkit-scrollbar {
+  display: none;               /* Chrome, Safari, Edge */
 }
 .brand {
   font-weight: 800;
@@ -133,7 +152,12 @@ button.outline { background:#fff; color:#111827; border-color:#111827; }
 .notification-content { display:flex; flex-direction:column; gap:4px; flex:1; }
 .notification-subject { font-size:14px; color:#1f2937; }
 .notification-meta { font-size:12px; color:#9ca3af; }
-.content { padding: 24px 32px 40px; box-sizing: border-box; }
+.content {
+  padding: 24px 32px 40px;
+  box-sizing: border-box;
+  flex: 1;
+  overflow-y: auto;
+}
 .card {
   background: #fff;
   padding: 16px;
@@ -301,6 +325,18 @@ td {
   border-bottom: 1px solid #e5e7eb;
   text-align: left;
   vertical-align: top;
+}
+
+/* sortable headers */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sort-indicator {
+  font-size: 11px;
+  color: #6b7280;
+  margin-left: 4px;
 }
 
 tr:hover {
@@ -875,4 +911,212 @@ textarea {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.4;
+}
+
+.approval-management .card-actions {
+  gap: 10px;
+}
+
+.approval-filters select,
+.approval-filters input[type="search"] {
+  min-width: 150px;
+}
+
+.approval-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.approval-summary > div {
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.approval-summary strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Filter bar and tabs styling for ApprovalList */
+.filter-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.filter-select {
+  min-width: 140px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.search-group { position: relative; max-width: 360px; flex: 1 1 260px; }
+.search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#9ca3af; font-size: 14px; }
+.search-input { width:100%; padding:8px 12px 8px 36px; border:1px solid #d1d5db; border-radius:10px; background:#f9fafb; }
+.search-input:focus { outline:none; border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+
+.chip-row { margin-top: 8px; }
+
+.approval-table table {
+  width: 100%;
+}
+
+.approval-table th,
+.approval-table td {
+  vertical-align: middle;
+}
+
+.approval-table .stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approval-table .stack .small {
+  font-size: 12px;
+}
+
+.taglist-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.tag-outline {
+  color: #1f2937;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.tag-danger {
+  background: rgba(248, 113, 113, 0.18);
+  color: #b91c1c;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  min-width: 100px;
+}
+
+.status-progress {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.status-complete {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+}
+
+.status-reject {
+  background: rgba(248, 113, 113, 0.18);
+  color: #b91c1c;
+}
+
+.status-return {
+  background: rgba(234, 179, 8, 0.18);
+  color: #b45309;
+}
+
+.status-unknown {
+  background: rgba(107, 114, 128, 0.18);
+  color: #374151;
+}
+
+.approver-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.approver-badge {
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.approver-badge.approved {
+  background: rgba(52, 211, 153, 0.18);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.approver-badge.pending {
+  background: rgba(96, 165, 250, 0.18);
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.table-actions .primary,
+.table-actions .danger,
+.table-actions .outline {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.table-actions .danger {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+}
+
+.row-urgent {
+  background: rgba(254, 243, 199, 0.4);
+}
+
+@media (max-width: 1024px) {
+  .approval-filters {
+    flex-wrap: wrap;
+  }
+
+  .approval-filters select,
+  .approval-filters input[type="search"] {
+    flex: 1 1 45%;
+    min-width: 0;
+  }
+
+  .table-actions {
+    flex-direction: column;
+  }
 }

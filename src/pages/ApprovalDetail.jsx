@@ -18,6 +18,40 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
+const statusClassMap = {
+  승인대기: "status-progress",
+  "1차승인완료": "status-progress",
+  승인완료: "status-complete",
+  반려: "status-reject",
+  반납: "status-return",
+};
+
+const getStatusClass = (status) => statusClassMap[status] ?? "status-unknown";
+
+const computeStageLabel = (approvalInfo, approvers = []) => {
+  if (!Array.isArray(approvers) || approvers.length === 0) return null;
+  if (approvalInfo !== "승인대기" && approvalInfo !== "1차승인완료") return null;
+  const approved = approvers.filter((item) => item?.isApproved);
+  if (approved.length === 0) return null;
+  const minStep = Math.min(...approved.map((item) => Number(item.step) || 0).filter((step) => step > 0));
+  if (!Number.isFinite(minStep) || minStep <= 0) return null;
+  return `${minStep}차 승인 완료`;
+};
+
+const computeUrgency = (deadline, approvalInfo) => {
+  if (!deadline) return { urgent: false, label: null };
+  const active = approvalInfo === "승인대기" || approvalInfo === "1차승인완료";
+  if (!active) return { urgent: false, label: null };
+  const now = new Date();
+  const due = new Date(deadline);
+  if (Number.isNaN(due.getTime())) return { urgent: false, label: null };
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays > 5) return { urgent: false, label: null };
+  if (diffDays > 0) return { urgent: true, label: `긴급 D-${diffDays}` };
+  if (diffDays === 0) return { urgent: true, label: "긴급 오늘 마감" };
+  return { urgent: true, label: `긴급 ${Math.abs(diffDays)}일 지연` };
+};
+
 const statusLabel = (status) => {
   switch (status) {
     case "승인완료":
@@ -65,6 +99,20 @@ export default function ApprovalDetail() {
   const canProcess = useMemo(
     () => approverPending.some((item) => item.username === actionUsername),
     [approverPending, actionUsername],
+  );
+
+  const statusClass = useMemo(() => getStatusClass(approval?.approvalInfo), [approval]);
+  const stageLabel = useMemo(
+    () => (approval ? computeStageLabel(approval.approvalInfo, approval.approvers) : null),
+    [approval],
+  );
+  const urgency = useMemo(
+    () => (approval ? computeUrgency(approval.deadline, approval.approvalInfo) : { urgent: false }),
+    [approval],
+  );
+  const nextPending = useMemo(
+    () => (approval?.approvers || []).find((item) => !item.isApproved),
+    [approval],
   );
 
   const loadDetail = useCallback(async () => {
@@ -197,6 +245,12 @@ export default function ApprovalDetail() {
         <div>
           <h2>결재 상세</h2>
           <p className="muted">결재 ID {approval.approvalId} · {statusLabel(approval.approvalInfo)}</p>
+          <div className="taglist-wrap" style={{ marginTop: 8 }}>
+            <span className={`status-chip ${statusClass}`}>{statusLabel(approval.approvalInfo)}</span>
+            {stageLabel && <span className="tag tag-outline">{stageLabel}</span>}
+            {urgency.urgent && urgency.label && <span className="tag tag-danger">{urgency.label}</span>}
+            {approval.type && <span className="tag tag-outline">{approval.type}</span>}
+          </div>
         </div>
         <div className="card-actions">
           <button type="button" className="outline" onClick={() => navigate(-1)}>
@@ -212,6 +266,10 @@ export default function ApprovalDetail() {
             <div>
               <dt>신청자</dt>
               <dd>{approval.userName ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>다음 결재자</dt>
+              <dd>{nextPending?.username ?? "-"}</dd>
             </div>
             <div>
               <dt>신청 유형</dt>
@@ -280,6 +338,11 @@ export default function ApprovalDetail() {
 
       <section className="detail-section action-box">
         <h3>승인/반려 처리</h3>
+        {urgency.urgent && urgency.label && (
+          <p className="muted" style={{ marginBottom: 8 }}>
+            ⚠️ {urgency.label} - 빠른 처리가 필요합니다.
+          </p>
+        )}
         <div className="form-grid">
           <label>
             처리자

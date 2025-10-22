@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Tooltip from "@/components/Tooltip";
 import { fetchAvailableDevices } from "@/api/devices";
 
 const columns = [
@@ -267,7 +268,19 @@ export default function DeviceList() {
                   <tr key={device.id}>
                     <td>{device.categoryName ?? "-"}</td>
                     <td>{device.id}</td>
-                    <td>{device.purpose ?? "-"}</td>
+                    <td>
+                      {device.purpose ? (
+                        (device.spec && device.spec.toString().trim()) ? (
+                          <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.spec}</div>}>
+                            <div style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
+                          </Tooltip>
+                        ) : (
+                          <div style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
+                        )
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>
                       {(device.tags ?? []).length > 0 ? (
                         <div className="tags-list">
@@ -281,7 +294,33 @@ export default function DeviceList() {
                         "-"
                       )}
                     </td>
-                    <td>{device.description ? device.description : "-"}</td>
+                    <td>
+                      {device.description ? (
+                        <Tooltip
+                          content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}
+                          maxWidth={480}
+                          maxHeight={320}
+                        >
+                          <div style={{ display: 'block', width: '100%' }}>
+                            <span
+                              title={typeof device.description === 'string' ? '' : undefined}
+                              style={{
+                                display: 'inline-block',
+                                maxWidth: 300,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                verticalAlign: 'bottom',
+                              }}
+                            >
+                              {device.description}
+                            </span>
+                          </div>
+                        </Tooltip>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>
                       {device.approvalInfo === "승인대기" && device.approvalType === "반납"
                         ? `반납 예정 (${device.deadline ?? "미정"})`

@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import { useMemo, useState } from 'react'
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 
 export default function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(true)
   const [ledgerOpen, setLedgerOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [myOpen, setMyOpen] = useState(true)
 
   const menuClass = useMemo(
@@ -37,7 +39,6 @@ export default function Sidebar() {
               <NavLink to="/admin/item" className={submenuClass}>품목 등록</NavLink>
               <NavLink to="/admin/project" className={submenuClass}>프로젝트 편집</NavLink>
               <NavLink to="/admin/dept" className={submenuClass}>부서 편집</NavLink>
-              <NavLink to="/admin/approvals" className={submenuClass}>결재 관리</NavLink>
               <div className="menu-toggle" style={{ padding: '6px 8px' }} onClick={() => setLedgerOpen(!ledgerOpen)}>
                 <span>장비 관리 대장</span>
                 <span style={{ marginLeft: 'auto', opacity: .8 }}>{ledgerOpen ? '▾' : '▸'}</span>
@@ -48,7 +49,22 @@ export default function Sidebar() {
                   <NavLink to="/admin/ledger/disposal" className={submenuClass}>폐기 장비 리스트</NavLink>
                 </div>
               )}
-              <NavLink to="/admin/users" className={submenuClass}>유저 관리</NavLink>
+              <div className="menu-toggle" style={{ padding: '6px 8px' }} onClick={() => setUserMenuOpen(!userMenuOpen)}>
+                <span>유저 관리</span>
+                <span style={{ marginLeft: 'auto', opacity: .8 }}>{userMenuOpen ? '▾' : '▸'}</span>
+              </div>
+              {userMenuOpen && (
+                <div className="submenu-group">
+                  <NavLink to="/admin/users/list" className={submenuClass}>유저 목록</NavLink>
+                  <NavLink to="/admin/users/add" className={submenuClass}>유저 추가</NavLink>
+                  <NavLink to="/admin/users/reissue" className={submenuClass}>유저 비밀번호 재발행</NavLink>
+                  <NavLink to="/admin/users/delete" className={submenuClass}>유저 삭제</NavLink>
+                </div>
+              )}
+              <NavLink to="/admin/approvals" className={submenuClass}>
+                <AssignmentTurnedInIcon fontSize="small" style={{ marginRight: 4 }} />
+                결재 관리
+              </NavLink>
             </div>
           )}
         </div>

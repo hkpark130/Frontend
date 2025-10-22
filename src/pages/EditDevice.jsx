@@ -1,15 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { fetchProjects } from '@/api/devices';
+import { fetchProjects, fetchDeviceDetail, updateDevice } from '@/api/devices';
 import './RegisterDevice.css';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
+import { useParams, useNavigate } from 'react-router-dom';
 
 const categories = ['노트북', '데스크탑', '서버', '모니터', '태블릿', '기타'];
 // 프로젝트 리스트는 fetchProjects로 동적 로드
 const departments = ['경영지원부', '개발부', '영업부'];
 
 export default function EditDevice() {
+  const navigate = useNavigate();
+  const { deviceId } = useParams();
+
   const [form, setForm] = useState({
     category: '',
     assetCode: '',
@@ -31,6 +35,11 @@ export default function EditDevice() {
     purchaseDate: '',
   });
   const [projects, setProjects] = useState([]);
+  const [searchId, setSearchId] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // 프로젝트 콤보박스 관련 상태
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
@@ -51,6 +60,15 @@ export default function EditDevice() {
       setProjects(Array.isArray(data) ? data : []);
     });
   }, []);
+
+  // 디바이스 상세 불러오기 (초기: URL 파라미터에 deviceId가 있으면 자동 조회)
+  useEffect(() => {
+    if (deviceId) {
+      setSearchId(deviceId);
+      handleSearch(deviceId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceId]);
 
   // 콤보박스 외부 클릭 시 닫기
   useEffect(() => {
@@ -100,16 +118,115 @@ export default function EditDevice() {
   // 금액 표시용
   const formattedPrice = form.price ? Number(form.price).toLocaleString() + ' 원' : '0 원';
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: API 연동
-    alert('장비 정보가 수정되었습니다.');
+    if (!form.assetCode) return;
+    setIsSaving(true);
+    try {
+      const payload = {
+        id: form.assetCode,
+        categoryName: form.category || null,
+        manageDepName: form.manageDept || null,
+        projectName: form.project || null,
+        username: form.username || null,
+        realUser: form.realUser || null,
+        status: form.status || null,
+        purpose: form.purpose || null,
+        spec: form.spec || null,
+        price: form.price ? Number(form.price) : null,
+        model: form.model || null,
+        company: form.manufacturer || null,
+        sn: form.serial || null,
+        description: form.note || null,
+        adminDescription: form.adminNote || null,
+        purchaseDate: form.purchaseDate || null,
+      };
+      await updateDevice(form.assetCode, payload);
+      alert('장비 정보가 수정되었습니다.');
+    } catch (e2) {
+      console.error(e2);
+      alert('수정에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // DeviceDto -> form 매핑
+  const mapDeviceToForm = (dto) => ({
+    category: dto.categoryName || '',
+    assetCode: dto.id || '',
+    project: dto.projectName || '',
+    manageDept: dto.manageDepName || '',
+    username: dto.username || '',
+    realUser: dto.realUser || '',
+    status: dto.status || '정상',
+    purpose: dto.purpose || '',
+    spec: dto.spec || '',
+    price: dto.price != null ? String(dto.price) : '',
+    vatIncluded: '포함',
+    model: dto.model || '',
+    manufacturer: dto.company || '',
+    serial: dto.sn || '',
+    mac: '',
+    note: dto.description || '',
+    adminNote: dto.adminDescription || '',
+    purchaseDate: dto.purchaseDate ? dayjs(dto.purchaseDate).format('YYYY-MM-DD') : '',
+  });
+
+  // 장비 조회 실행
+  const handleSearch = async (rawId) => {
+    const id = (rawId ?? searchId).trim();
+    if (!id) return;
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const dto = await fetchDeviceDetail(id);
+      setForm(mapDeviceToForm(dto));
+      // 프로젝트 라벨 표시
+      setSelectedProjectLabel(
+        (dto.projectName || '') + (dto.projectCode ? ` (${dto.projectCode})` : '')
+      );
+      setIsLoaded(true);
+      // URL에 id가 없고 사용자가 검색으로 들어왔다면 라우팅 정리 (/admin/edit/:id)
+      if (!deviceId) {
+        navigate(`/admin/edit/${id}`, { replace: true });
+      }
+    } catch (err) {
+      console.error(err);
+      setLoadError('장비를 찾을 수 없습니다. 관리번호를 확인해주세요.');
+      setIsLoaded(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ko">
       <div className="card register-device-card">
         <h2>장비 편집</h2>
+
+        {/* 검색 바: 편집할 장비의 관리번호(ID) 입력 */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+          <input
+            type="text"
+            placeholder="편집할 장비의 ‘관리번호’ 를 입력해주세요."
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSearch();
+            }}
+            style={{ flex: 1, padding: '0.75rem 1rem', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: '1rem', minHeight: 20 }}
+          />
+          <button type="button" onClick={() => handleSearch()} disabled={isLoading}>
+            {isLoading ? '조회중...' : '검색'}
+          </button>
+        </div>
+        {loadError && (
+          <div style={{ color: '#d00', marginBottom: 16 }}>{loadError}</div>
+        )}
+
+        {/* 장비 로딩 전에는 폼을 감춤 */}
+        {!isLoaded ? null : (
         <form onSubmit={handleSubmit} className="register-device-form">
           {/* 품목 */}
           <label>
@@ -153,7 +270,7 @@ export default function EditDevice() {
                       value={projectSearchTerm}
                       onChange={(event) => setProjectSearchTerm(event.target.value)}
                       autoFocus
-                      style={{width: '100%'}}
+                      style={{width: '94%'}}
                     />
                     <div className="combobox-list">
                       {filteredProjects.length === 0 && (
@@ -314,8 +431,9 @@ export default function EditDevice() {
               }}
             />
           </label>
-          <button type="submit">수정</button>
+          <button type="submit" disabled={isSaving}>{isSaving ? '저장중…' : '수정'}</button>
         </form>
+        )}
       </div>
     </LocalizationProvider>
   );

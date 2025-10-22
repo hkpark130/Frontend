@@ -1,3 +1,8 @@
+// 장비 일괄 등록 (bulk)
+export const bulkRegisterDevices = async (deviceList) => {
+  const { data } = await api.post('/api/devices/bulk', deviceList);
+  return data;
+};
 import api from "./api";
 
 export const fetchAvailableDevices = async () => {
@@ -7,6 +12,11 @@ export const fetchAvailableDevices = async () => {
 
 export const fetchDeviceDetail = async (deviceId) => {
   const { data } = await api.get(`/api/device/${deviceId}`);
+  return data;
+};
+
+export const updateDevice = async (deviceId, payload) => {
+  const { data } = await api.put(`/api/device/${deviceId}`, payload);
   return data;
 };
 

@@ -8,10 +8,17 @@ import DeviceApplication from './pages/DeviceApplication'
 import Sidebar from './components/layout/Sidebar'
 import Header from './components/layout/Header'
 import ApprovalList from './pages/ApprovalList'
-
 import ApprovalDetail from './pages/ApprovalDetail'
 import RegisterDevice from './pages/RegisterDevice'
 import EditDevice from './pages/EditDevice'
+import BulkRegisterDevice from './pages/BulkRegisterDevice'
+import AddCategory from './pages/AddCategory'
+import EditProject from './pages/EditProject'
+import EditDepartment from './pages/EditDepartment'
+import LdapUserList from './pages/LdapUserList'
+import LdapUserAdd from './pages/LdapUserAdd'
+import LdapUserReissue from './pages/LdapUserReissue'
+import LdapUserDelete from './pages/LdapUserDelete'
 
 export default function App() {
   return (
@@ -32,14 +39,18 @@ export default function App() {
               <Route path="/admin/approvals/:approvalId" element={<ApprovalDetail />} />
               <Route path="/admin/register" element={<RegisterDevice />} />
               <Route path="/admin/edit" element={<EditDevice />} />
-              <Route path="/admin/bulk" element={<div className="card">장비 일괄 등록</div>} />
-              <Route path="/admin/item" element={<div className="card">품목 등록</div>} />
-              <Route path="/admin/project" element={<div className="card">프로젝트 편집</div>} />
-              <Route path="/admin/dept" element={<div className="card">부서 편집</div>} />
+              <Route path="/admin/edit/:deviceId" element={<EditDevice />} />
+              <Route path="/admin/bulk" element={<BulkRegisterDevice />} />
+              <Route path="/admin/item" element={<AddCategory />} />
+              <Route path="/admin/project" element={<EditProject />} />
+              <Route path="/admin/dept" element={<EditDepartment />} />
               <Route path="/admin/ledger/list" element={<div className="card">장비 리스트</div>} />
               <Route path="/admin/ledger/disposal" element={<div className="card">폐기 장비 리스트</div>} />
               <Route path="/admin/map" element={<div className="card">장비 지도</div>} />
-              <Route path="/admin/users" element={<div className="card">유저 관리</div>} />
+              <Route path="/admin/users/list" element={<LdapUserList />} />
+              <Route path="/admin/users/add" element={<LdapUserAdd />} />
+              <Route path="/admin/users/reissue" element={<LdapUserReissue />} />
+              <Route path="/admin/users/delete" element={<LdapUserDelete />} />
               {/* 마이 페이지 */}
               <Route path="/mypage" element={<MyPage />} />
               <Route path="/mypage/my-assets" element={<div className="card">나의 장비</div>} />
