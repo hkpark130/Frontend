@@ -16,8 +16,18 @@ export const fetchAdminDevices = async () => {
   return data;
 };
 
+export const fetchDisposedDevices = async () => {
+  const { data } = await api.get("/api/admin/devices/disposed");
+  return data;
+};
+
 export const disposeDeviceByAdmin = async (deviceId, payload = {}) => {
   const { data } = await api.post(`/api/admin/devices/${deviceId}/dispose`, payload);
+  return data;
+};
+
+export const recoverDeviceByAdmin = async (deviceId, payload = {}) => {
+  const { data } = await api.post(`/api/admin/devices/${deviceId}/recover`, payload);
   return data;
 };
 

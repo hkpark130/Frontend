@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import Tooltip from '@/components/Tooltip';
-import { disposeDeviceByAdmin, fetchAdminDevices } from '@/api/devices';
+import { fetchDisposedDevices, recoverDeviceByAdmin } from '@/api/devices';
 import { useUser } from '@/context/UserProvider';
 
 const tableColumns = [
   { key: 'categoryName', label: '품목', sortable: true },
   { key: 'id', label: '관리번호', sortable: true },
   { key: 'username', label: '사용자', sortable: true },
-  { key: 'status', label: '상태', sortable: true },
   { key: 'manageDepName', label: '관리부서', sortable: true },
   { key: 'projectName', label: '프로젝트', sortable: true },
   { key: 'purpose', label: '용도', sortable: true },
@@ -16,6 +14,7 @@ const tableColumns = [
   { key: 'model', label: '모델명', sortable: true },
   { key: 'company', label: '제조사', sortable: true },
   { key: 'sn', label: 'S/N', sortable: true },
+  { key: 'description', label: '비고', sortable: false },
   { key: 'actions', label: 'Action', sortable: false },
 ];
 
@@ -23,10 +22,10 @@ const filterableColumns = [
   { value: 'categoryName', label: '품목' },
   { value: 'id', label: '관리번호' },
   { value: 'username', label: '사용자' },
-  { value: 'status', label: '상태' },
   { value: 'manageDepName', label: '관리부서' },
   { value: 'projectName', label: '프로젝트' },
   { value: 'purpose', label: '용도' },
+  { value: 'company', label: '제조사' },
 ];
 
 const formatDate = (value) => {
@@ -39,7 +38,7 @@ const formatDate = (value) => {
 const getDisplayUser = (device) => {
   const name = device.realUser && device.realUser.trim().length > 0
     ? device.realUser.trim()
-    : device.username;
+    : device.username ?? device.user;
   return name ?? '';
 };
 
@@ -92,7 +91,7 @@ const historyTableStyles = {
     color: '#f9fafb',
     borderRadius: 8,
     overflow: 'hidden',
-    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.35)'
+    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.35)',
   },
   headCell: {
     textAlign: 'left',
@@ -101,18 +100,18 @@ const historyTableStyles = {
     backgroundColor: 'rgba(31, 41, 55, 0.95)',
     fontSize: '13px',
     fontWeight: 600,
-    letterSpacing: '0.01em'
+    letterSpacing: '0.01em',
   },
   bodyCell: {
     padding: '6px 10px',
     fontSize: '13px',
     color: '#f3f4f6',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
-  }
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+  },
 };
 
 const historyRowStyle = (index) => ({
-  backgroundColor: index % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)'
+  backgroundColor: index % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
 });
 
 const HistoryTable = ({ history }) => {
@@ -146,7 +145,7 @@ const HistoryTable = ({ history }) => {
   );
 };
 
-export default function AdminLedgerList() {
+export default function AdminDisposalList() {
   const [devices, setDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -156,18 +155,17 @@ export default function AdminLedgerList() {
   const [sortKey, setSortKey] = useState('categoryName');
   const [sortDirection, setSortDirection] = useState('asc');
   const [isProcessing, setIsProcessing] = useState(false);
-  const navigate = useNavigate();
   const { user } = useUser();
 
   const loadDevices = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await fetchAdminDevices();
+      const data = await fetchDisposedDevices();
       setDevices(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
-      setError('장비 목록을 불러오는 중 문제가 발생했습니다.');
+      setError('폐기 장비 목록을 불러오는 중 문제가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -259,6 +257,8 @@ export default function AdminLedgerList() {
               return getDisplayUser(device) || '-';
             case 'purchaseDate':
               return formatDate(device.purchaseDate) || '-';
+            case 'description':
+              return device.description ?? '-';
             default:
               return device[column.key] ?? '-';
           }
@@ -266,14 +266,14 @@ export default function AdminLedgerList() {
       return values.map(escapeForCsv).join(',');
     });
 
-  const BOM = String.fromCharCode(0xfeff);
-  const csvContents = [BOM + headers, ...rows].join('\r\n');
+    const BOM = String.fromCharCode(0xfeff);
+    const csvContents = [BOM + headers, ...rows].join('\r\n');
     const blob = new Blob([csvContents], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
 
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `device-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `disposed-devices-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
@@ -287,14 +287,14 @@ export default function AdminLedgerList() {
     return sortDirection === 'asc' ? ' ↑' : ' ↓';
   };
 
-  const renderUserCell = (device) => {
-    const name = getDisplayUser(device) || '-';
-    if (!device.description) {
-      return name;
+  const renderHistoryCell = (device) => {
+    if (!device.history || device.history.length === 0) {
+      return device.id ?? '-';
     }
+
     return (
-      <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}>
-        <span className="table-link">{name}</span>
+      <Tooltip content={<HistoryTable history={device.history} />}>
+        <span className="table-link">{device.id}</span>
       </Tooltip>
     );
   };
@@ -329,20 +329,29 @@ export default function AdminLedgerList() {
     );
   };
 
-  const renderHistoryCell = (device) => {
-    if (!device.history || device.history.length === 0) {
-      return device.id;
+  const renderDescriptionCell = (device) => {
+    if (!device.description) {
+      return '-';
+    }
+
+    if (device.description.length < 30) {
+      return device.description;
     }
 
     return (
-      <Tooltip content={<HistoryTable history={device.history} />}>
-        <span className="table-link">{device.id}</span>
+      <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}>
+        <span className="table-link">자세히</span>
       </Tooltip>
     );
   };
 
-  const handleDispose = async (device) => {
-    if (!window.confirm(`정말로 장비 "${device.id}" 를 폐기 처리하시겠습니까?`)) {
+  const renderUserCell = (device) => {
+    const name = getDisplayUser(device) || '-';
+    return name;
+  };
+
+  const handleRecover = async (device) => {
+    if (!window.confirm(`장비 "${device.id}" 을(를) 복구 처리하시겠습니까?`)) {
       return;
     }
 
@@ -351,12 +360,12 @@ export default function AdminLedgerList() {
       setIsProcessing(true);
       const operatorUsername = user?.profile?.preferred_username || user?.profile?.email || null;
       const payload = operatorUsername ? { operatorUsername } : {};
-      await disposeDeviceByAdmin(device.id, payload);
-      alert('폐기 처리되었습니다.');
+      await recoverDeviceByAdmin(device.id, payload);
+      alert('복구 처리되었습니다.');
       await loadDevices();
     } catch (err) {
       console.error(err);
-      setError('폐기 처리 중 문제가 발생했습니다. 다시 시도해 주세요.');
+      setError('복구 처리 중 문제가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       setIsProcessing(false);
     }
@@ -366,14 +375,13 @@ export default function AdminLedgerList() {
     <div className="card">
       <div className="card-header" style={{ gap: 16 }}>
         <div>
-          <h2>장비 리스트</h2>
-          <p className="muted">관리자는 가용 장비와 대여 중인 장비를 한 눈에 확인할 수 있습니다.</p>
+          <h2>폐기 장비 리스트</h2>
+          <p className="muted">폐기된 장비 이력을 확인하고 필요한 경우 복구할 수 있습니다.</p>
         </div>
         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="secondary" onClick={downloadCsv} disabled={isProcessing}>
             Export
           </button>
-          <Link to="/admin/register" className="primary">장비 등록</Link>
         </div>
       </div>
 
@@ -451,7 +459,7 @@ export default function AdminLedgerList() {
               {sortedDevices.length === 0 ? (
                 <tr>
                   <td colSpan={tableColumns.length} className="empty">
-                    조건에 맞는 장비가 없습니다.
+                    조건에 맞는 폐기 장비가 없습니다.
                   </td>
                 </tr>
               ) : (
@@ -460,31 +468,23 @@ export default function AdminLedgerList() {
                     <td>{device.categoryName ?? '-'}</td>
                     <td>{renderHistoryCell(device)}</td>
                     <td>{renderUserCell(device)}</td>
-                    <td>{device.status ?? '-'}</td>
-                    <td>{device.manageDepName ?? '-'}</td>
-                    <td>{device.projectName ?? '-'}</td>
+                    <td>{device.manageDepName ?? device.manageDep ?? '-'}</td>
+                    <td>{device.projectName ?? device.project ?? '-'}</td>
                     <td>{renderPurposeCell(device)}</td>
                     <td>{formatDate(device.purchaseDate) || '-'}</td>
                     <td>{device.model ?? '-'}</td>
                     <td>{device.company ?? '-'}</td>
                     <td>{device.sn ?? '-'}</td>
+                    <td>{renderDescriptionCell(device)}</td>
                     <td>
                       <div className="table-actions" style={{ display: 'flex', gap: 6 }}>
                         <button
                           type="button"
-                          className="secondary"
-                          onClick={() => navigate(`/admin/edit/${device.id}`)}
+                          className="primary"
+                          onClick={() => handleRecover(device)}
                           disabled={isProcessing}
                         >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => handleDispose(device)}
-                          disabled={isProcessing}
-                        >
-                          폐기
+                          복구
                         </button>
                       </div>
                     </td>

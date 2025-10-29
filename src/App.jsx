@@ -20,6 +20,7 @@ import LdapUserAdd from './pages/LdapUserAdd'
 import LdapUserReissue from './pages/LdapUserReissue'
 import LdapUserDelete from './pages/LdapUserDelete'
 import AdminLedgerList from './pages/AdminLedgerList'
+import AdminDisposalList from './pages/AdminDisposalList'
 
 export default function App() {
   return (
@@ -46,7 +47,7 @@ export default function App() {
               <Route path="/admin/project" element={<EditProject />} />
               <Route path="/admin/dept" element={<EditDepartment />} />
               <Route path="/admin/ledger/list" element={<AdminLedgerList />} />
-              <Route path="/admin/ledger/disposal" element={<div className="card">폐기 장비 리스트</div>} />
+              <Route path="/admin/ledger/disposal" element={<AdminDisposalList />} />
               <Route path="/admin/map" element={<div className="card">장비 지도</div>} />
               <Route path="/admin/users/list" element={<LdapUserList />} />
               <Route path="/admin/users/add" element={<LdapUserAdd />} />
