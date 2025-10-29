@@ -52,6 +52,11 @@ const toDateStringFromDayjs = (value) =>
     ? value.format("YYYY-MM-DD")
     : "";
 
+const DEFAULT_APPROVERS = Object.freeze([
+  { stage: "1차 승인자", username: "test", displayName: "test" },
+  { stage: "2차 승인자", username: "박현경", displayName: "박현경" },
+]);
+
 const initialPayload = (deviceId, userName) => ({
   deviceId,
   userName,
@@ -68,6 +73,7 @@ const initialPayload = (deviceId, userName) => ({
   deadlineDate: "",
   description: "",
   categoryName: "",
+  approvers: DEFAULT_APPROVERS.map((item) => item.username),
 });
 
 export default function DeviceApplication() {
@@ -242,6 +248,7 @@ export default function DeviceApplication() {
 
     const payload = {
       ...form,
+      approvers: form.approvers ?? DEFAULT_APPROVERS.map((item) => item.username),
       deadline: `${form.deadlineDate}T00:00:00`,
       usageStartDate: `${form.usageStartDate}T00:00:00`,
       usageEndDate: `${form.usageEndDate}T00:00:00`,
@@ -488,6 +495,26 @@ export default function DeviceApplication() {
               .combobox-option:hover {
                 background: #f1f5f9;
               }
+              .approver-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 16px 24px;
+              }
+              .approver-field {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-width: 180px;
+                flex: 1 1 220px;
+                max-width: 260px;
+              }
+              .approver-field input {
+                padding: 8px 10px;
+                border-radius: 8px;
+                border: 1px solid #d1d5db;
+                font-size: 15px;
+                background: #f9fafb;
+              }
               @media (max-width: 900px) {
                 .device-info-grid {
                   flex-direction: column;
@@ -495,6 +522,10 @@ export default function DeviceApplication() {
                 }
                 .device-info-label {
                   max-width: 100%;
+                }
+                .approver-grid {
+                  flex-direction: column;
+                  gap: 12px 0;
                 }
               }
               @media (max-width: 900px) {
@@ -507,6 +538,25 @@ export default function DeviceApplication() {
                 }
               }
             `}</style>
+          </section>
+
+          <section className="form-section">
+            <div className="form-section-header">
+              <h3>결재자</h3>
+              <p className="muted">승인자는 시스템에서 고정으로 지정됩니다.</p>
+            </div>
+            <div className="approver-grid">
+              {DEFAULT_APPROVERS.map((approver) => (
+                <label key={approver.stage} className="approver-field">
+                  {approver.stage}
+                  <input
+                    type="text"
+                    value={approver.displayName ?? approver.username}
+                    readOnly
+                  />
+                </label>
+              ))}
+            </div>
           </section>
 
           <section className="form-section">
