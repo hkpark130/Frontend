@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Tooltip from "@/components/Tooltip";
 import { fetchAvailableDevices } from "@/api/devices";
@@ -20,76 +20,85 @@ const filterOptions = [
   { value: "tags", label: "태그" },
 ];
 
-const normalizeToArray = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.content)) return payload.content;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.value)) return payload.value;
-  return [];
-};
-
-const containsKeyword = (value, keyword) => {
-  if (!value) return false;
-  return value.toString().toLowerCase().includes(keyword);
-};
-
 export default function DeviceList() {
   const [devices, setDevices] = useState([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterField, setFilterField] = useState("all");
   const [chipFilter, setChipFilter] = useState("ALL");
   const [requestedCategory, setRequestedCategory] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [metadata, setMetadata] = useState({ categories: [], purposes: [] });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const navigate = useNavigate();
   const location = useLocation();
   const lastAppliedKeyRef = useRef(null);
 
   useEffect(() => {
-    const loadDevices = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchAvailableDevices();
-        setDevices(normalizeToArray(data));
-      } catch (err) {
-        console.error(err);
-        setError("장비 목록을 불러오는 중 문제가 발생했습니다.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    const handle = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [search]);
 
+  const loadDevices = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const params = {
+        page: currentPage,
+        size: pageSize,
+        filterField,
+      };
+      if (debouncedSearch) {
+        params.keyword = debouncedSearch;
+      }
+      if (chipFilter !== "ALL") {
+        params.chipValue = chipFilter;
+      }
+      const data = await fetchAvailableDevices(params);
+      const content = Array.isArray(data?.content) ? data.content : [];
+      setDevices(content);
+      setTotalItems(Number(data?.totalElements ?? 0));
+      setTotalPages(Math.max(1, Number(data?.totalPages ?? 1)));
+      const meta = data?.metadata ?? {};
+      setMetadata({
+        categories: Array.isArray(meta?.categories) ? meta.categories : [],
+        purposes: Array.isArray(meta?.purposes) ? meta.purposes : [],
+      });
+    } catch (err) {
+      console.error(err);
+      setError("장비 목록을 불러오는 중 문제가 발생했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chipFilter, currentPage, debouncedSearch, filterField, pageSize]);
+
+  useEffect(() => {
     loadDevices();
-  }, []);
+  }, [loadDevices]);
 
   const chipOptions = useMemo(() => {
     if (filterField === "categoryName") {
       const preferred = ["노트북", "서버"];
-      const categorySet = new Set();
-      devices.forEach((device) => {
-        if (device?.categoryName) {
-          categorySet.add(device.categoryName);
-        }
-      });
-      const prioritized = preferred.filter((item) => categorySet.has(item));
-      const others = Array.from(categorySet).filter((item) => !preferred.includes(item));
+      const categories = Array.isArray(metadata?.categories) ? metadata.categories : [];
+      const prioritized = preferred.filter((item) => categories.includes(item));
+      const others = categories.filter((item) => !preferred.includes(item));
       return ["ALL", ...prioritized, ...others];
     }
     if (filterField === "purpose") {
       const preferred = ["개발", "사무"];
-      const purposeSet = new Set();
-      devices.forEach((device) => {
-        if (device?.purpose) {
-          purposeSet.add(device.purpose);
-        }
-      });
-      const prioritized = preferred.filter((item) => purposeSet.has(item));
-      const others = Array.from(purposeSet).filter((item) => !preferred.includes(item));
+      const purposes = Array.isArray(metadata?.purposes) ? metadata.purposes : [];
+      const prioritized = preferred.filter((item) => purposes.includes(item));
+      const others = purposes.filter((item) => !preferred.includes(item));
       return ["ALL", ...prioritized, ...others];
     }
     return [];
-  }, [devices, filterField]);
+  }, [filterField, metadata]);
 
   useEffect(() => {
     if (filterField !== "categoryName" && filterField !== "purpose") {
@@ -102,6 +111,16 @@ export default function DeviceList() {
       setChipFilter("ALL");
     }
   }, [chipOptions, chipFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterField, chipFilter, pageSize, debouncedSearch]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const categoryFromQuery = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -152,40 +171,6 @@ export default function DeviceList() {
       setRequestedCategory(null);
     }
   }, [requestedCategory, chipOptions]);
-
-  const filteredDevices = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return devices.filter((device) => {
-      if (filterField === "categoryName" && chipFilter !== "ALL" && device.categoryName !== chipFilter) {
-        return false;
-      }
-
-      if (filterField === "purpose" && chipFilter !== "ALL" && device.purpose !== chipFilter) {
-        return false;
-      }
-
-      if (!keyword) {
-        return true;
-      }
-
-      if (filterField === "all") {
-        const values = [
-          device.categoryName,
-          device.id,
-          device.purpose,
-          device.description,
-          ...(device.tags ?? []),
-        ];
-        return values.filter(Boolean).some((value) => containsKeyword(value, keyword));
-      }
-
-      if (filterField === "tags") {
-        return (device.tags ?? []).some((tag) => containsKeyword(tag, keyword));
-      }
-
-      return containsKeyword(device[filterField], keyword);
-    });
-  }, [devices, search, filterField, chipFilter]);
 
   const handleApply = (deviceId) => {
     navigate(`/device/${deviceId}/apply`);
@@ -257,14 +242,14 @@ export default function DeviceList() {
               </tr>
             </thead>
             <tbody>
-              {filteredDevices.length === 0 ? (
+              {devices.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + 1} className="empty">
                     조건에 맞는 장비가 없습니다.
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((device) => (
+                devices.map((device) => (
                   <tr key={device.id}>
                     <td>{device.categoryName ?? "-"}</td>
                     <td>{device.id}</td>
@@ -336,6 +321,56 @@ export default function DeviceList() {
               )}
             </tbody>
           </table>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="muted">총 {totalItems}건</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="muted">페이지당</span>
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    const nextSize = Number(event.target.value);
+                    setPageSize(nextSize);
+                    setCurrentPage(1);
+                  }}
+                >
+                  {[10, 25, 50].map((sizeOption) => (
+                    <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" className="outline" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                ◀◀
+              </button>
+              <button
+                type="button"
+                className="outline"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                ◀
+              </button>
+              <span className="muted">{currentPage} / {totalPages}</span>
+              <button
+                type="button"
+                className="outline"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                className="outline"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                ▶▶
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

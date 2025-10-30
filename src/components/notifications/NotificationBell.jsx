@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "react-oidc-context";
-import { fetchNotifications, markNotificationAsRead } from "@/api/notifications";
+import { fetchNotifications, markNotificationAsRead, deleteNotification } from "@/api/notifications";
 
 const REFRESH_INTERVAL = 60_000;
 
@@ -87,6 +87,30 @@ export default function NotificationBell() {
     }
   };
 
+  const handleNotificationKeyDown = (event, notification) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNotificationClick(notification);
+    }
+  };
+
+  const handleDeleteNotification = async (event, notification) => {
+    event.stopPropagation();
+    if (!username) {
+      alert("로그인 정보를 확인할 수 없습니다.");
+      return;
+    }
+    try {
+      await deleteNotification(notification.id, username);
+      setNotifications((prev) =>
+        normalizeNotifications(prev).filter((item) => item.id !== notification.id),
+      );
+    } catch (error) {
+      console.error("Failed to delete notification", error);
+      alert("알림 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
   if (!auth.isAuthenticated) {
     return null;
   }
@@ -109,20 +133,35 @@ export default function NotificationBell() {
               <div className="notification-empty">표시할 알림이 없습니다.</div>
             ) : (
               items.map((notification) => (
-                <button
-                  type="button"
+                <div
                   key={notification.id}
                   className={`notification-item ${notification.is_read ? "read" : ""}`}
-                  onClick={() => handleNotificationClick(notification)}
                 >
-                  <span className={`notification-icon ${notification.iconClass || ""}`}>
-                    {resolveIcon(notification.icon)}
-                  </span>
-                  <span className="notification-content">
-                    <span className="notification-subject">{notification.subject}</span>
-                    <span className="notification-meta">{notification.date}</span>
-                  </span>
-                </button>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="notification-body"
+                    onClick={() => handleNotificationClick(notification)}
+                    onKeyDown={(event) => handleNotificationKeyDown(event, notification)}
+                  >
+                    <span className={`notification-icon ${notification.iconClass || ""}`}>
+                      {resolveIcon(notification.icon)}
+                    </span>
+                    <span className="notification-content">
+                      <span className="notification-subject">{notification.subject}</span>
+                      <span className="notification-meta">{notification.date}</span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="notification-remove"
+                    aria-label="알림 삭제"
+                    style={{ marginLeft: "auto" }}
+                    onClick={(event) => handleDeleteNotification(event, notification)}
+                  >
+                    ×
+                  </button>
+                </div>
               ))
             )}
           </div>

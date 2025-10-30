@@ -1,7 +1,7 @@
 import api from "./api";
 
-export const fetchPendingApprovals = async () => {
-  const { data } = await api.get("/api/approvals/pending");
+export const fetchPendingApprovals = async (params = {}) => {
+  const { data } = await api.get("/api/approvals/pending", { params });
   return data;
 };
 
@@ -35,6 +35,16 @@ export const addApprovalComment = async (approvalId, payload) => {
   return data;
 };
 
+export const updateApprovalComment = async (approvalId, commentId, payload) => {
+  const { data } = await api.put(`/api/approvals/${approvalId}/comments/${commentId}`, payload);
+  return data;
+};
+
+export const deleteApprovalComment = async (approvalId, commentId, username) => {
+  const config = username ? { params: { username } } : {};
+  await api.delete(`/api/approvals/${approvalId}/comments/${commentId}`, config);
+};
+
 export const fetchNotifications = async (receiver) => {
   const { data } = await api.get("/api/notifications", { params: { receiver } });
   return data;
@@ -42,4 +52,9 @@ export const fetchNotifications = async (receiver) => {
 
 export const markNotificationRead = async (notificationId) => {
   await api.post(`/api/notifications/${notificationId}/read`);
+};
+
+export const fetchDefaultApprovers = async () => {
+  const { data } = await api.get("/api/approvals/default-approvers");
+  return data;
 };

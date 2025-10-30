@@ -7,6 +7,7 @@ import {
 } from "@/api/approvals";
 import { useUser } from "@/context/UserProvider";
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import Pagination from '@/components/Pagination';
 
 const formatDate = (value, withTime = false) => {
   if (!value) return "-";
@@ -20,17 +21,28 @@ const formatDate = (value, withTime = false) => {
 
 const statusClassMap = {
   승인대기: "status-progress",
+  진행중: "status-progress",
   "1차승인완료": "status-progress",
   승인완료: "status-complete",
   반려: "status-reject",
   반납: "status-return",
+  취소: "status-unknown",
+  임시저장: "status-unknown",
 };
 
 const getStatusClass = (status) => statusClassMap[status] ?? "status-unknown";
 
+const FILTER_OPTIONS = [
+  { value: "approvalId", label: "신청번호" },
+  { value: "categoryName", label: "신청장비" },
+  { value: "userName", label: "신청자" },
+  { value: "approvalInfo", label: "신청정보" },
+  { value: "deviceId", label: "관리번호" },
+];
+
 const computeStageLabel = (approvalInfo, approvers = []) => {
   if (!Array.isArray(approvers) || approvers.length === 0) return null;
-  if (approvalInfo !== "승인대기" && approvalInfo !== "1차승인완료") return null;
+  if (!["승인대기", "진행중", "1차승인완료"].includes(approvalInfo)) return null;
   const approved = approvers.filter((item) => item?.isApproved);
   if (approved.length === 0) return null;
   const minStep = Math.min(...approved.map((item) => Number(item.step) || 0).filter((step) => step > 0));
@@ -40,9 +52,8 @@ const computeStageLabel = (approvalInfo, approvers = []) => {
 
 const computeUrgency = (deadline, approvalInfo) => {
   if (!deadline) return { urgent: false, label: null, days: null };
-  const active = approvalInfo === "승인대기" || approvalInfo === "1차승인완료";
+  const active = ["승인대기", "진행중", "1차승인완료"].includes(approvalInfo);
   if (!active) return { urgent: false, label: null, days: null };
-
   const now = new Date();
   const due = new Date(deadline);
   if (Number.isNaN(due.getTime())) return { urgent: false, label: null, days: null };
@@ -60,15 +71,7 @@ const computeUrgency = (deadline, approvalInfo) => {
   }
   return { urgent: true, label: `긴급 ${Math.abs(diffDays)}일 지연`, days: diffDays };
 };
-
-const normalizeList = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.content)) return payload.content;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.value)) return payload.value;
-  return [];
-};
+  
 
 const extractUsername = (profile) =>
   profile?.preferred_username || profile?.name || profile?.email || "";
@@ -89,28 +92,64 @@ export default function ApprovalList() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   // Filters
-  const [filterField, setFilterField] = useState("신청장비"); // 신청번호, 신청장비, 신청자, 신청정보, 관리번호
+  const [filterField, setFilterField] = useState("categoryName");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [chipValue, setChipValue] = useState("ALL");
   // Sorting
   const [sortField, setSortField] = useState("deadline"); // approvalId | deviceId | deadline
   const [sortOrder, setSortOrder] = useState("asc"); // asc | desc
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [metadata, setMetadata] = useState({ categories: [], applicants: [] });
+
   const currentUsername = useMemo(() => extractUsername(user?.profile), [user]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query]);
 
   const loadApprovals = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await fetchPendingApprovals();
-      setApprovals(normalizeList(data));
+      const params = {
+        page: currentPage,
+        size: pageSize,
+        filterField,
+        sortField,
+        sortOrder,
+      };
+      if (debouncedQuery) {
+        params.keyword = debouncedQuery;
+      }
+      if (chipValue !== "ALL") {
+        params.chipValue = chipValue;
+      }
+      const data = await fetchPendingApprovals(params);
+      const content = Array.isArray(data?.content) ? data.content : [];
+      setApprovals(content);
+      setTotalItems(Number(data?.totalElements ?? 0));
+      setTotalPages(Math.max(1, Number(data?.totalPages ?? 1)));
+      const meta = data?.metadata ?? {};
+      setMetadata({
+        categories: Array.isArray(meta?.categories) ? meta.categories : [],
+        applicants: Array.isArray(meta?.applicants) ? meta.applicants : [],
+      });
     } catch (err) {
       console.error(err);
       setError("결재 목록을 불러오는 중 문제가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [chipValue, currentPage, debouncedQuery, filterField, pageSize, sortField, sortOrder]);
 
   useEffect(() => {
     loadApprovals();
@@ -120,26 +159,47 @@ export default function ApprovalList() {
 
   // Unique sources for dynamic chips
   const uniqueCategories = useMemo(
-    () => Array.from(new Set(approvalsList.map((item) => item.categoryName).filter(Boolean))),
-    [approvalsList],
+    () => (Array.isArray(metadata?.categories) ? metadata.categories : []),
+    [metadata],
   );
   const uniqueApplicants = useMemo(
-    () => Array.from(new Set(approvalsList.map((item) => item.userName).filter(Boolean))),
-    [approvalsList],
+    () => (Array.isArray(metadata?.applicants) ? metadata.applicants : []),
+    [metadata],
   );
 
   // Dynamic chips based on filterField
   const chipOptions = useMemo(() => {
-    if (filterField === "신청장비") return ["ALL", ...uniqueCategories];
-    if (filterField === "신청자") return ["ALL", ...uniqueApplicants];
-    if (filterField === "신청정보") return ["ALL", "승인대기", "승인완료", "반려"];
-    return ["ALL"]; // 신청번호, 관리번호
+    if (filterField === "categoryName") return ["ALL", ...uniqueCategories];
+    if (filterField === "userName") return ["ALL", ...uniqueApplicants];
+    if (filterField === "approvalInfo") return ["ALL", "승인대기", "진행중", "승인완료", "반려", "취소"];
+    return ["ALL"]; // approvalId, deviceId
   }, [filterField, uniqueCategories, uniqueApplicants]);
+
+  const currentFilterOption = useMemo(
+    () => FILTER_OPTIONS.find((option) => option.value === filterField) ?? FILTER_OPTIONS[0],
+    [filterField],
+  );
 
   // Reset chip when filter field changes
   useEffect(() => {
     setChipValue("ALL");
   }, [filterField]);
+
+  useEffect(() => {
+    if (!chipOptions.includes(chipValue)) {
+      setChipValue("ALL");
+    }
+  }, [chipOptions, chipValue]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterField, chipValue, sortField, sortOrder, pageSize, debouncedQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const enhancedApprovals = useMemo(
     () =>
@@ -170,54 +230,6 @@ export default function ApprovalList() {
       }),
     [approvalsList, currentUsername],
   );
-
-  const filteredApprovals = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    const fieldKey = {
-      신청번호: (i) => i.approvalId?.toString() ?? "",
-      신청장비: (i) => i.categoryName ?? "",
-      신청자: (i) => i.userName ?? "",
-      신청정보: (i) => `${i.type ?? ""} ${i.approvalInfo ?? ""}`,
-      관리번호: (i) => i.deviceId ?? "",
-    }[filterField];
-
-    const list = enhancedApprovals.filter((item) => {
-      if (chipValue !== "ALL") {
-        if (filterField === "신청장비" && (item.categoryName ?? "") !== chipValue) return false;
-        if (filterField === "신청자" && (item.userName ?? "") !== chipValue) return false;
-        if (filterField === "신청정보" && (item.approvalInfo ?? "") !== chipValue) return false;
-      }
-      if (!keyword) return true;
-      try {
-        const value = fieldKey ? fieldKey(item) : "";
-        return value.toString().toLowerCase().includes(keyword);
-      } catch {
-        return true;
-      }
-    });
-
-    const compare = (a, b) => {
-      const dir = sortOrder === "asc" ? 1 : -1;
-      if (sortField === "approvalId") {
-        const av = Number(a.approvalId) || 0;
-        const bv = Number(b.approvalId) || 0;
-        return (av - bv) * dir;
-      }
-      if (sortField === "deviceId") {
-        const av = (a.deviceId ?? "").toString();
-        const bv = (b.deviceId ?? "").toString();
-        return av.localeCompare(bv, "ko") * dir;
-      }
-      if (sortField === "deadline") {
-        const av = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
-        const bv = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
-        return (av - bv) * dir;
-      }
-      return 0;
-    };
-
-    return list.sort(compare);
-  }, [enhancedApprovals, query, filterField, chipValue, sortField, sortOrder]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -291,8 +303,8 @@ export default function ApprovalList() {
         <div className="card-actions" style={{ flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
           <div className="filter-row" style={{ width: "100%" }}>
             <select className="filter-select" value={filterField} onChange={(e) => setFilterField(e.target.value)}>
-              {['신청번호','신청장비','신청자','신청정보','관리번호'].map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
+              {FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
             <div className="search-group">
@@ -300,7 +312,7 @@ export default function ApprovalList() {
               <input
                 className="search-input"
                 type="search"
-                placeholder={`${filterField} 검색`}
+                placeholder={`${currentFilterOption.label} 검색`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -353,16 +365,15 @@ export default function ApprovalList() {
               </tr>
             </thead>
             <tbody>
-              {filteredApprovals.length === 0 && (
+              {approvalsList.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="empty">
                     조건에 맞는 결재 요청이 없습니다.
                   </td>
                 </tr>
-              )}
-
-              {filteredApprovals.map((item) => (
-                <tr key={item.approvalId} className={item.urgency.urgent ? "row-urgent" : undefined}>
+              ) : (
+                enhancedApprovals.map((item) => (
+                  <tr key={item.approvalId} className={item.urgency.urgent ? "row-urgent" : undefined}>
                   <td>
                     <div className="taglist-wrap">
                       {item.urgency.urgent && item.urgency.label && (
@@ -387,7 +398,7 @@ export default function ApprovalList() {
                   <td>{item.deadlineLabel}</td>
                   <td>
                     <span className={`status-chip ${item.statusClass}`}>
-                      {item.stageLabel && item.approvalInfo === "승인대기"
+                      {item.stageLabel && ["승인대기", "진행중"].includes(item.approvalInfo)
                         ? item.stageLabel
                         : item.approvalInfo ?? "-"}
                     </span>
@@ -424,10 +435,22 @@ export default function ApprovalList() {
                       </button>
                     </div>
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+          {/* Pagination controls */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 25, 50, 100]}
+            onPageChange={(p) => setCurrentPage(p)}
+            onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            totalItems={totalItems}
+            disabled={false}
+          />
         </div>
       )}
     </div>

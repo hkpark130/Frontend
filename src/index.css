@@ -146,7 +146,7 @@ button.danger:hover {
 .notification-item:hover { background:#f8fafc; }
 .notification-item.read { opacity:0.7; }
 .notification-icon { width:36px; height:36px; border-radius:50%; background:#e5e7eb; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; letter-spacing:0.5px; }
-.notification-icon.primary { background:#dbeafe; color:#1d4ed8; }
+.notification-icon.primary { background:#dbeafe; --notification-icon-bg: #dbeafe; color:#1d4ed8; }
 .notification-icon.secondary { background:#ede9fe; color:#5b21b6; }
 .notification-icon.success { background:#dcfce7; color:#15803d; }
 .notification-content { display:flex; flex-direction:column; gap:4px; flex:1; }
@@ -952,6 +952,24 @@ textarea {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.4;
+}
+
+/* Spacing for comment action buttons and edit form */
+.comment-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Larger font for the editing textarea to improve readability */
+.comment-edit-form textarea {
+  font-size: 18px;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px; /* space between buttons */
+  margin-top: 8px; /* space between content and actions */
 }
 
 .approval-management .card-actions {

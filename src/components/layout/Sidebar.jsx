@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useMemo, useState } from 'react'
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import './Sidebar.css'
 
 export default function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(true)
@@ -61,7 +62,10 @@ export default function Sidebar() {
                   <NavLink to="/admin/users/delete" className={submenuClass}>유저 삭제</NavLink>
                 </div>
               )}
-              <NavLink to="/admin/approvals" className={submenuClass}>
+              <NavLink
+                to="/admin/approvals"
+                className={({ isActive }) => `${submenuClass({ isActive })} approval-highlight prominent`}
+              >
                 <AssignmentTurnedInIcon fontSize="small" style={{ marginRight: 4 }} />
                 결재 관리
               </NavLink>

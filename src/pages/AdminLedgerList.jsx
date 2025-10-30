@@ -39,39 +39,8 @@ const formatDate = (value) => {
 const getDisplayUser = (device) => {
   const name = device.realUser && device.realUser.trim().length > 0
     ? device.realUser.trim()
-    : device.username;
+    : device.username ?? device.user;
   return name ?? '';
-};
-
-const getFilterValue = (device, key) => {
-  switch (key) {
-    case 'username':
-      return getDisplayUser(device);
-    case 'purchaseDate':
-      return formatDate(device.purchaseDate);
-    default:
-      return device[key] ?? '';
-  }
-};
-
-const getComparableValue = (device, key) => {
-  switch (key) {
-    case 'purchaseDate': {
-      const date = device.purchaseDate ? new Date(device.purchaseDate) : null;
-      return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
-    }
-    case 'username':
-      return getDisplayUser(device).toLowerCase();
-    case 'price':
-      return typeof device.price === 'number' ? device.price : 0;
-    default: {
-      const value = device[key];
-      if (value === null || value === undefined) {
-        return '';
-      }
-      return value.toString().toLowerCase();
-    }
-  }
 };
 
 const escapeForCsv = (value) => {
@@ -146,32 +115,141 @@ const HistoryTable = ({ history }) => {
   );
 };
 
+const paginationStyles = {
+  wrapper: {
+    marginTop: 16,
+    padding: '12px 16px',
+    backgroundColor: 'transparent',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  infoGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  controlsGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  button: {
+    backgroundColor: 'rgba(17, 24, 39, 0.9)',
+    color: '#f9fafb',
+    border: '1px solid rgba(148, 163, 184, 0.45)',
+    borderRadius: 8,
+    padding: '6px 12px',
+    minWidth: 44,
+    fontSize: 13,
+    fontWeight: 600,
+    transition: 'all 0.12s ease',
+    cursor: 'pointer',
+  },
+  buttonActive: {
+    backgroundColor: 'rgba(31, 41, 55, 0.95)',
+    border: '1px solid rgba(148, 163, 184, 0.65)',
+    color: '#f9fafb',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.24)',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+    filter: 'grayscale(20%)',
+  },
+  select: {
+    backgroundColor: 'rgba(17, 24, 39, 0.9)',
+    color: '#f9fafb',
+    border: '1px solid rgba(148, 163, 184, 0.45)',
+    borderRadius: 8,
+    padding: '4px 10px',
+  },
+};
+
+const buildPageNumbers = (currentPage, totalPages, windowSize = 5) => {
+  if (totalPages <= 0) {
+    return [1];
+  }
+  const half = Math.floor(windowSize / 2);
+  let start = Math.max(1, currentPage - half);
+  let end = Math.min(totalPages, start + windowSize - 1);
+  if (end - start + 1 < windowSize) {
+    start = Math.max(1, end - windowSize + 1);
+  }
+  const pages = [];
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+  return pages;
+};
+
 export default function AdminLedgerList() {
   const [devices, setDevices] = useState([]);
+  const [metadata, setMetadata] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterKey, setFilterKey] = useState(filterableColumns[0].value);
   const [selectedFilterValue, setSelectedFilterValue] = useState('');
   const [sortKey, setSortKey] = useState('categoryName');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const navigate = useNavigate();
   const { user } = useUser();
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [search]);
 
   const loadDevices = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await fetchAdminDevices();
-      setDevices(Array.isArray(data) ? data : []);
+
+      const params = {
+        page: currentPage,
+        size: pageSize,
+        filterField: filterKey,
+        sortField: sortKey,
+        sortDirection,
+      };
+      if (debouncedSearch) {
+        params.keyword = debouncedSearch;
+      }
+      if (selectedFilterValue) {
+        params.filterValue = selectedFilterValue;
+      }
+
+  const response = await fetchAdminDevices(params);
+  const content = Array.isArray(response?.content) ? response.content : [];
+  const totalElements = Number(response?.totalElements ?? 0);
+  const totalPagesValue = Number(response?.totalPages ?? 1);
+  setDevices(content);
+  setTotalItems(Number.isNaN(totalElements) ? 0 : totalElements);
+  setTotalPages(Math.max(1, Number.isNaN(totalPagesValue) ? 1 : totalPagesValue));
+  setMetadata(response?.metadata ?? {});
     } catch (err) {
       console.error(err);
       setError('장비 목록을 불러오는 중 문제가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentPage, debouncedSearch, filterKey, pageSize, selectedFilterValue, sortDirection, sortKey]);
 
   useEffect(() => {
     loadDevices();
@@ -181,51 +259,59 @@ export default function AdminLedgerList() {
     setSelectedFilterValue('');
   }, [filterKey]);
 
+  useEffect(() => {
+    setCurrentPage((prev) => (prev === 1 ? prev : 1));
+  }, [debouncedSearch, filterKey, pageSize, selectedFilterValue]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const pageSizeOptions = useMemo(() => {
+    const raw = metadata?.pageSizeOptions;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map((value) => Number(value)).filter((value) => !Number.isNaN(value));
+    }
+    return [10, 25, 50];
+  }, [metadata]);
+
   const uniqueFilterValues = useMemo(() => {
     if (filterKey === 'id') {
       return [];
     }
-    const values = devices
-      .map((device) => getFilterValue(device, filterKey))
-      .filter((value) => value !== null && value !== undefined && `${value}`.trim().length > 0);
-    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
-  }, [devices, filterKey]);
-
-  const filteredDevices = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return devices.filter((device) => {
-      if (selectedFilterValue) {
-        const value = getFilterValue(device, filterKey);
-        if (value !== selectedFilterValue) {
-          return false;
-        }
-      }
-
-      if (!keyword) {
-        return true;
-      }
-
-      const target = getFilterValue(device, filterKey);
-      return target && target.toString().toLowerCase().includes(keyword);
-    });
-  }, [devices, filterKey, search, selectedFilterValue]);
-
-  const sortedDevices = useMemo(() => {
-    const copy = [...filteredDevices];
-    if (!sortKey) {
-      return copy;
+    const filters = metadata?.filters;
+    if (filters && Array.isArray(filters[filterKey])) {
+      return filters[filterKey];
     }
+    return [];
+  }, [metadata, filterKey]);
 
-    copy.sort((a, b) => {
-      const valueA = getComparableValue(a, sortKey);
-      const valueB = getComparableValue(b, sortKey);
-      if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
-      if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return copy;
-  }, [filteredDevices, sortDirection, sortKey]);
+  useEffect(() => {
+    if (selectedFilterValue && !uniqueFilterValues.includes(selectedFilterValue)) {
+      setSelectedFilterValue('');
+    }
+  }, [selectedFilterValue, uniqueFilterValues]);
+
+  const pageButtons = useMemo(
+    () => buildPageNumbers(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
+
+  const handlePageSizeChange = (event) => {
+    const nextSize = Number(event.target.value);
+    if (!Number.isNaN(nextSize)) {
+      setPageSize(nextSize);
+    }
+  };
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages || page === currentPage) {
+      return;
+    }
+    setCurrentPage(page);
+  };
 
   const toggleSort = (columnKey, sortable) => {
     if (!sortable) {
@@ -238,47 +324,80 @@ export default function AdminLedgerList() {
       setSortKey(columnKey);
       setSortDirection('asc');
     }
+    setCurrentPage(1);
   };
 
-  const downloadCsv = () => {
-    if (sortedDevices.length === 0) {
-      return;
-    }
+  const downloadCsv = useCallback(async () => {
+    try {
+      setIsExporting(true);
 
-    const headers = tableColumns
-      .filter((column) => column.key !== 'actions')
-      .map((column) => column.label)
-      .join(',');
+      if (totalItems === 0) {
+        alert('내보낼 데이터가 없습니다.');
+        return;
+      }
 
-    const rows = sortedDevices.map((device) => {
-      const values = tableColumns
+      const targetSize = Math.max(totalItems, pageSize);
+      const params = {
+        page: 1,
+        size: targetSize,
+        filterField: filterKey,
+        sortField: sortKey,
+        sortDirection,
+      };
+      if (debouncedSearch) {
+        params.keyword = debouncedSearch;
+      }
+      if (selectedFilterValue) {
+        params.filterValue = selectedFilterValue;
+      }
+
+      const response = await fetchAdminDevices(params);
+      const rowsSource = Array.isArray(response?.content) ? response.content : [];
+      if (rowsSource.length === 0) {
+        alert('내보낼 데이터가 없습니다.');
+        return;
+      }
+
+      const headers = tableColumns
         .filter((column) => column.key !== 'actions')
-        .map((column) => {
-          switch (column.key) {
-            case 'username':
-              return getDisplayUser(device) || '-';
-            case 'purchaseDate':
-              return formatDate(device.purchaseDate) || '-';
-            default:
-              return device[column.key] ?? '-';
-          }
-        });
-      return values.map(escapeForCsv).join(',');
-    });
+        .map((column) => column.label)
+        .join(',');
 
-  const BOM = String.fromCharCode(0xfeff);
-  const csvContents = [BOM + headers, ...rows].join('\r\n');
-    const blob = new Blob([csvContents], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
+      const rows = rowsSource.map((device) => {
+        const values = tableColumns
+          .filter((column) => column.key !== 'actions')
+          .map((column) => {
+            switch (column.key) {
+              case 'username':
+                return getDisplayUser(device) || '-';
+              case 'purchaseDate':
+                return formatDate(device.purchaseDate) || '-';
+              default:
+                return device[column.key] ?? '-';
+            }
+          });
+        return values.map(escapeForCsv).join(',');
+      });
 
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `device-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    window.URL.revokeObjectURL(url);
-  };
+      const BOM = String.fromCharCode(0xfeff);
+      const csvContents = [BOM + headers, ...rows].join('\r\n');
+      const blob = new Blob([csvContents], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `device-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('데이터 내보내기에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [debouncedSearch, filterKey, pageSize, selectedFilterValue, sortDirection, sortKey, totalItems]);
 
   const renderSortIndicator = (columnKey) => {
     if (sortKey !== columnKey) {
@@ -370,7 +489,12 @@ export default function AdminLedgerList() {
           <p className="muted">관리자는 가용 장비와 대여 중인 장비를 한 눈에 확인할 수 있습니다.</p>
         </div>
         <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="secondary" onClick={downloadCsv} disabled={isProcessing}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={downloadCsv}
+            disabled={isProcessing || isExporting}
+          >
             Export
           </button>
           <Link to="/admin/register" className="primary">장비 등록</Link>
@@ -431,69 +555,149 @@ export default function AdminLedgerList() {
       {error && <p className="error">{error}</p>}
 
       {!isLoading && !error && (
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                {tableColumns.map((column) => (
-                  <th
-                    key={column.key}
-                    onClick={() => toggleSort(column.key, column.sortable)}
-                    style={{ cursor: column.sortable ? 'pointer' : 'default' }}
-                  >
-                    {column.label}
-                    {renderSortIndicator(column.key)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedDevices.length === 0 ? (
+        <>
+          <div className="table-wrapper">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={tableColumns.length} className="empty">
-                    조건에 맞는 장비가 없습니다.
-                  </td>
+                  {tableColumns.map((column) => (
+                    <th
+                      key={column.key}
+                      onClick={() => toggleSort(column.key, column.sortable)}
+                      style={{ cursor: column.sortable ? 'pointer' : 'default' }}
+                    >
+                      {column.label}
+                      {renderSortIndicator(column.key)}
+                    </th>
+                  ))}
                 </tr>
-              ) : (
-                sortedDevices.map((device) => (
-                  <tr key={device.id}>
-                    <td>{device.categoryName ?? '-'}</td>
-                    <td>{renderHistoryCell(device)}</td>
-                    <td>{renderUserCell(device)}</td>
-                    <td>{device.status ?? '-'}</td>
-                    <td>{device.manageDepName ?? '-'}</td>
-                    <td>{device.projectName ?? '-'}</td>
-                    <td>{renderPurposeCell(device)}</td>
-                    <td>{formatDate(device.purchaseDate) || '-'}</td>
-                    <td>{device.model ?? '-'}</td>
-                    <td>{device.company ?? '-'}</td>
-                    <td>{device.sn ?? '-'}</td>
-                    <td>
-                      <div className="table-actions" style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => navigate(`/admin/edit/${device.id}`)}
-                          disabled={isProcessing}
-                        >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => handleDispose(device)}
-                          disabled={isProcessing}
-                        >
-                          폐기
-                        </button>
-                      </div>
+              </thead>
+              <tbody>
+                {devices.length === 0 ? (
+                  <tr>
+                    <td colSpan={tableColumns.length} className="empty">
+                      조건에 맞는 장비가 없습니다.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  devices.map((device) => (
+                    <tr key={device.id}>
+                      <td>{device.categoryName ?? '-'}</td>
+                      <td>{renderHistoryCell(device)}</td>
+                      <td>{renderUserCell(device)}</td>
+                      <td>{device.status ?? '-'}</td>
+                      <td>{device.manageDepName ?? '-'}</td>
+                      <td>{device.projectName ?? '-'}</td>
+                      <td>{renderPurposeCell(device)}</td>
+                      <td>{formatDate(device.purchaseDate) || '-'}</td>
+                      <td>{device.model ?? '-'}</td>
+                      <td>{device.company ?? '-'}</td>
+                      <td>{device.sn ?? '-'}</td>
+                      <td>
+                        <div className="table-actions" style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => navigate(`/admin/edit/${device.id}`)}
+                            disabled={isProcessing}
+                          >
+                            편집
+                          </button>
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() => handleDispose(device)}
+                            disabled={isProcessing}
+                          >
+                            폐기
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={paginationStyles.wrapper}>
+            <div style={paginationStyles.infoGroup}>
+              <span className="muted">총 {totalItems}건</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="muted">페이지당</span>
+                <select value={pageSize} onChange={handlePageSizeChange} style={paginationStyles.select}>
+                  {pageSizeOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={paginationStyles.controlsGroup}>
+              <button
+                type="button"
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+                style={{
+                  ...paginationStyles.button,
+                  ...(currentPage === 1 ? paginationStyles.buttonDisabled : {}),
+                }}
+              >
+                {'<<'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                style={{
+                  ...paginationStyles.button,
+                  ...(currentPage === 1 ? paginationStyles.buttonDisabled : {}),
+                }}
+              >
+                {'<'}
+              </button>
+              {pageButtons.map((page) => {
+                const isActive = page === currentPage;
+                return (
+                  <button
+                    type="button"
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    style={{
+                      ...paginationStyles.button,
+                      ...(isActive ? paginationStyles.buttonActive : {}),
+                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    disabled={isActive}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                style={{
+                  ...paginationStyles.button,
+                  ...(currentPage === totalPages ? paginationStyles.buttonDisabled : {}),
+                }}
+              >
+                {'>'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                style={{
+                  ...paginationStyles.button,
+                  ...(currentPage === totalPages ? paginationStyles.buttonDisabled : {}),
+                }}
+              >
+                {'>>'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

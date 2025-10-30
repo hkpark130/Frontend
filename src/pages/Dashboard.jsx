@@ -20,17 +20,24 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [categories, setCategories] = useState([])
+  const [categoryCounts, setCategoryCounts] = useState({})
 
   useEffect(() => {
     const load = async () => {
       try {
         setIsLoading(true)
         const [devData, catData] = await Promise.all([
-          fetchAvailableDevices(),
+          fetchAvailableDevices({ page: 1, size: 1 }),
           fetchCategories(),
         ])
         setDevices(normalizeToArray(devData))
         setCategories(Array.isArray(catData) ? catData : [])
+        const meta = devData?.metadata ?? {}
+        if (meta && typeof meta === 'object') {
+          setCategoryCounts(meta.categoryCounts ?? {})
+        } else {
+          setCategoryCounts({})
+        }
       } catch (e) {
         console.error(e)
         setError('장비 현황을 불러오는 중 오류가 발생했습니다.')
@@ -41,20 +48,22 @@ export default function Dashboard() {
     load()
   }, [])
 
-  const dashboardItems = useMemo(() => {
-    // 카테고리별 개수 집계 (가용 + 반납예정 포함, 대여중은 백엔드에서 제외됨)
-    const counts = categories.reduce((acc, cur) => {
-      acc[cur.name] = 0
-      return acc
-    }, {})
-    for (const d of devices) {
-      const name = d?.categoryName
-      if (name && Object.prototype.hasOwnProperty.call(counts, name)) {
-        counts[name] += 1
-      }
+  const fallbackCounts = useMemo(() => {
+    const counts = {}
+    for (const device of devices) {
+      const name = device?.categoryName
+      if (!name) continue
+      counts[name] = (counts[name] ?? 0) + 1
     }
-    return categories.map((c) => ({ label: c.name, image: c.img || '', count: counts[c.name] ?? 0 }))
-  }, [devices, categories])
+    return counts
+  }, [devices])
+
+  const dashboardItems = useMemo(() => {
+    const baseCounts = (categoryCounts && Object.keys(categoryCounts).length > 0)
+      ? categoryCounts
+      : fallbackCounts
+    return categories.map((c) => ({ label: c.name, image: c.img || '', count: baseCounts[c.name] ?? 0 }))
+  }, [categories, categoryCounts, fallbackCounts])
 
   const handleNavigate = (category) => {
     const params = new URLSearchParams({ category })

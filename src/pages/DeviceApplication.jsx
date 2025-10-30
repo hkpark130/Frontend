@@ -16,6 +16,7 @@ import {
 } from "@/api/devices";
 import { useUser } from "@/context/UserProvider";
 import { PickersDay } from '@mui/x-date-pickers/PickersDay';
+import { fetchDefaultApprovers } from "@/api/approvals";
 
 const toDateString = (value) => (value && isValid(value) ? format(value, "yyyy-MM-dd") : "");
 
@@ -52,11 +53,6 @@ const toDateStringFromDayjs = (value) =>
     ? value.format("YYYY-MM-DD")
     : "";
 
-const DEFAULT_APPROVERS = Object.freeze([
-  { stage: "1차 승인자", username: "test", displayName: "test" },
-  { stage: "2차 승인자", username: "박현경", displayName: "박현경" },
-]);
-
 const initialPayload = (deviceId, userName) => ({
   deviceId,
   userName,
@@ -73,7 +69,7 @@ const initialPayload = (deviceId, userName) => ({
   deadlineDate: "",
   description: "",
   categoryName: "",
-  approvers: DEFAULT_APPROVERS.map((item) => item.username),
+  approvers: [],
 });
 
 export default function DeviceApplication() {
@@ -93,12 +89,59 @@ export default function DeviceApplication() {
   const [device, setDevice] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [defaultApprovers, setDefaultApprovers] = useState([]);
+  const [isApproverLoading, setIsApproverLoading] = useState(true);
+  const [approverFetchError, setApproverFetchError] = useState(null);
   const [form, setForm] = useState(() => initialPayload(deviceId, defaultUserName));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [projectSearchTerm, setProjectSearchTerm] = useState("");
   const projectComboRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadApprovers = async () => {
+      setApproverFetchError(null);
+      setIsApproverLoading(true);
+      try {
+        const data = await fetchDefaultApprovers();
+        if (cancelled) {
+          return;
+        }
+        const normalized = Array.isArray(data) ? data.filter(Boolean) : [];
+        const sorted = normalized
+          .map((item) => ({
+            stage: Number.isFinite(item?.stage)
+              ? item.stage
+              : Number.parseInt(item?.stage ?? 0, 10) || 0,
+            label: item?.label || null,
+            username: item?.username || "",
+            displayName: item?.displayName || item?.username || "",
+            keycloakId: item?.keycloakId || null,
+            locked: item?.locked ?? true,
+          }))
+          .sort((a, b) => a.stage - b.stage);
+        setDefaultApprovers(sorted);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setApproverFetchError("결재자 목록을 불러오지 못했습니다. 관리자에게 문의해 주세요.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsApproverLoading(false);
+        }
+      }
+    };
+
+    loadApprovers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -123,6 +166,24 @@ export default function DeviceApplication() {
   useEffect(() => {
     setForm(initialPayload(deviceId, defaultUserName));
   }, [deviceId, defaultUserName]);
+
+  useEffect(() => {
+    if (defaultApprovers.length === 0) {
+      return;
+    }
+    setForm((prev) => {
+      if (Array.isArray(prev.approvers) && prev.approvers.length > 0) {
+        return prev;
+      }
+      const usernames = defaultApprovers
+        .map((item) => item.username)
+        .filter((name) => !!name);
+      if (usernames.length === 0) {
+        return prev;
+      }
+      return { ...prev, approvers: usernames };
+    });
+  }, [defaultApprovers]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -179,6 +240,23 @@ export default function DeviceApplication() {
     }
     return `${form.projectName} (${form.projectCode})`;
   }, [form.projectCode, form.projectName]);
+
+  const approverDisplayList = useMemo(() => {
+    if (defaultApprovers.length > 0) {
+      return defaultApprovers;
+    }
+    if (Array.isArray(form.approvers) && form.approvers.length > 0) {
+      return form.approvers.map((username, index) => ({
+        stage: index + 1,
+        label: `${index + 1}차 승인자`,
+        username,
+        displayName: username,
+        keycloakId: null,
+        locked: true,
+      }));
+    }
+    return [];
+  }, [defaultApprovers, form.approvers]);
 
   const toggleProjectDropdown = () => {
     setIsProjectDropdownOpen((prev) => !prev);
@@ -246,9 +324,23 @@ export default function DeviceApplication() {
       return;
     }
 
+    const defaultApproverUsernames = defaultApprovers
+      .map((item) => item.username)
+      .filter((name) => !!name);
+
+    const resolvedApprovers =
+      Array.isArray(form.approvers) && form.approvers.length > 0
+        ? form.approvers
+        : defaultApproverUsernames;
+
+    if (!resolvedApprovers.length) {
+      setError("결재자 정보를 불러오지 못했습니다. 관리자에게 문의해 주세요.");
+      return;
+    }
+
     const payload = {
       ...form,
-      approvers: form.approvers ?? DEFAULT_APPROVERS.map((item) => item.username),
+      approvers: resolvedApprovers,
       deadline: `${form.deadlineDate}T00:00:00`,
       usageStartDate: `${form.usageStartDate}T00:00:00`,
       usageEndDate: `${form.usageEndDate}T00:00:00`,
@@ -543,19 +635,28 @@ export default function DeviceApplication() {
           <section className="form-section">
             <div className="form-section-header">
               <h3>결재자</h3>
-              <p className="muted">승인자는 시스템에서 고정으로 지정됩니다.</p>
+              {isApproverLoading && (
+                <p className="muted">결재자 정보를 불러오는 중입니다...</p>
+              )}
+              {approverFetchError && <p className="error">{approverFetchError}</p>}
             </div>
             <div className="approver-grid">
-              {DEFAULT_APPROVERS.map((approver) => (
-                <label key={approver.stage} className="approver-field">
-                  {approver.stage}
+              {approverDisplayList.map((approver) => (
+                <label
+                  key={`${approver.stage}-${approver.username || approver.displayName}`}
+                  className="approver-field"
+                >
+                  {approver.label ?? `${approver.stage}차 승인자`}
                   <input
                     type="text"
-                    value={approver.displayName ?? approver.username}
+                    value={approver.displayName ?? approver.username ?? ""}
                     readOnly
                   />
                 </label>
               ))}
+              {!isApproverLoading && approverDisplayList.length === 0 && !approverFetchError && (
+                <div className="muted">표시할 결재자가 없습니다.</div>
+              )}
             </div>
           </section>
 

@@ -6,18 +6,18 @@ export const bulkRegisterDevices = async (deviceList) => {
   return data;
 };
 
-export const fetchAvailableDevices = async () => {
-  const { data } = await api.get("/api/available-devicelist");
+export const fetchAvailableDevices = async (params = {}) => {
+  const { data } = await api.get("/api/available-devicelist", { params });
   return data;
 };
 
-export const fetchAdminDevices = async () => {
-  const { data } = await api.get("/api/admin/devices");
+export const fetchAdminDevices = async (params = {}) => {
+  const { data } = await api.get("/api/admin/devices", { params });
   return data;
 };
 
-export const fetchDisposedDevices = async () => {
-  const { data } = await api.get("/api/admin/devices/disposed");
+export const fetchDisposedDevices = async (params = {}) => {
+  const { data } = await api.get("/api/admin/devices/disposed", { params });
   return data;
 };
 
