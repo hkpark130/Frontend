@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Tooltip from "@/components/Tooltip";
+import Pagination from '@/components/Pagination';
 import { fetchAvailableDevices } from "@/api/devices";
 
 const columns = [
@@ -321,56 +322,19 @@ export default function DeviceList() {
               )}
             </tbody>
           </table>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="muted">총 {totalItems}건</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="muted">페이지당</span>
-                <select
-                  value={pageSize}
-                  onChange={(event) => {
-                    const nextSize = Number(event.target.value);
-                    setPageSize(nextSize);
-                    setCurrentPage(1);
-                  }}
-                >
-                  {[10, 25, 50].map((sizeOption) => (
-                    <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button type="button" className="outline" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
-                ◀◀
-              </button>
-              <button
-                type="button"
-                className="outline"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                ◀
-              </button>
-              <span className="muted">{currentPage} / {totalPages}</span>
-              <button
-                type="button"
-                className="outline"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                ▶
-              </button>
-              <button
-                type="button"
-                className="outline"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-              >
-                ▶▶
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={[10, 25, 50]}
+            onPageChange={(p) => setCurrentPage(p)}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+            totalItems={totalItems}
+            disabled={isLoading}
+          />
         </div>
       )}
     </div>

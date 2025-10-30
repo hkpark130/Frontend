@@ -51,10 +51,13 @@ const paginationStyles = {
     cursor: 'pointer',
   },
   buttonActive: {
-    backgroundColor: 'rgba(31, 41, 55, 0.95)',
-    border: '1px solid rgba(148, 163, 184, 0.65)',
-    color: '#f9fafb',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.24)',
+    /* Make the active (current) page visually distinct (gray) so users can
+       immediately see which page they're on. Keep it non-clickable look. */
+    backgroundColor: '#e5e7eb',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    color: '#111827',
+    boxShadow: 'none',
+    cursor: 'default',
   },
   buttonDisabled: {
     opacity: 0.5,

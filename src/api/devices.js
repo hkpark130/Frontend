@@ -21,6 +21,13 @@ export const fetchDisposedDevices = async (params = {}) => {
   return data;
 };
 
+export const fetchMyDevices = async (params = {}) => {
+  const { data } = await api.get("/api/my-devices", {
+    params,
+  });
+  return data;
+};
+
 export const disposeDeviceByAdmin = async (deviceId, payload = {}) => {
   const { data } = await api.post(`/api/admin/devices/${deviceId}/dispose`, payload);
   return data;
@@ -38,6 +45,11 @@ export const fetchDeviceDetail = async (deviceId) => {
 
 export const updateDevice = async (deviceId, payload) => {
   const { data } = await api.put(`/api/device/${deviceId}`, payload);
+  return data;
+};
+
+export const updateMyDeviceMemo = async (deviceId, payload) => {
+  const { data } = await api.patch(`/api/my-devices/${deviceId}`, payload);
   return data;
 };
 

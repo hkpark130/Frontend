@@ -21,6 +21,7 @@ import LdapUserReissue from './pages/LdapUserReissue'
 import LdapUserDelete from './pages/LdapUserDelete'
 import AdminLedgerList from './pages/AdminLedgerList'
 import AdminDisposalList from './pages/AdminDisposalList'
+import MyAssets from './pages/MyAssets'
 
 export default function App() {
   return (
@@ -55,7 +56,7 @@ export default function App() {
               <Route path="/admin/users/delete" element={<LdapUserDelete />} />
               {/* 마이 페이지 */}
               <Route path="/mypage" element={<MyPage />} />
-              <Route path="/mypage/my-assets" element={<div className="card">나의 장비</div>} />
+              <Route path="/mypage/my-assets" element={<MyAssets />} />
               <Route path="/mypage/requests" element={<div className="card">신청 내역</div>} />
               <Route path="/mypage/notifications" element={<div className="card">알림 이력</div>} />
             </Routes>

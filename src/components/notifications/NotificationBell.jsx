@@ -156,7 +156,8 @@ export default function NotificationBell() {
                     type="button"
                     className="notification-remove"
                     aria-label="알림 삭제"
-                    style={{ marginLeft: "auto" }}
+                    title="알림 삭제"
+                    style={{ marginLeft: "auto", borderRadius: "50%", width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center" }}
                     onClick={(event) => handleDeleteNotification(event, notification)}
                   >
                     ×

@@ -27,10 +27,21 @@ const statusClassMap = {
   반려: "status-reject",
   반납: "status-return",
   취소: "status-unknown",
-  임시저장: "status-unknown",
 };
 
-const getStatusClass = (status) => statusClassMap[status] ?? "status-unknown";
+const getStatusClass = (status) => {
+  if (!status) return "status-unknown";
+  if (typeof status === "string") {
+    const trimmed = status.trim();
+    if (trimmed === "승인완료") {
+      return "status-complete";
+    }
+    if (/^\d+차승인완료$/.test(trimmed)) {
+      return "status-progress";
+    }
+  }
+  return statusClassMap[status] ?? "status-unknown";
+};
 
 const FILTER_OPTIONS = [
   { value: "approvalId", label: "신청번호" },
@@ -42,17 +53,36 @@ const FILTER_OPTIONS = [
 
 const computeStageLabel = (approvalInfo, approvers = []) => {
   if (!Array.isArray(approvers) || approvers.length === 0) return null;
-  if (!["승인대기", "진행중", "1차승인완료"].includes(approvalInfo)) return null;
-  const approved = approvers.filter((item) => item?.isApproved);
-  if (approved.length === 0) return null;
-  const minStep = Math.min(...approved.map((item) => Number(item.step) || 0).filter((step) => step > 0));
-  if (!Number.isFinite(minStep) || minStep <= 0) return null;
-  return `${minStep}차 승인 완료`;
+  if (approvalInfo !== "승인대기" && !(typeof approvalInfo === "string" && approvalInfo.includes("승인완료"))) {
+    return null;
+  }
+
+  const pendingExists = approvers.some((item) => !item?.isApproved);
+  if (!pendingExists) {
+    return null;
+  }
+
+  const approvedSteps = approvers
+    .filter((item) => item?.isApproved)
+    .map((item) => Number(item.step) || 0)
+    .filter((step) => step > 0);
+
+  if (approvedSteps.length === 0) {
+    return null;
+  }
+
+  const highestStep = Math.max(...approvedSteps);
+  if (!Number.isFinite(highestStep) || highestStep <= 0) {
+    return null;
+  }
+
+  return `${highestStep}차승인완료`;
 };
 
 const computeUrgency = (deadline, approvalInfo) => {
   if (!deadline) return { urgent: false, label: null, days: null };
-  const active = ["승인대기", "진행중", "1차승인완료"].includes(approvalInfo);
+  const active = approvalInfo === "승인대기"
+    || (typeof approvalInfo === "string" && approvalInfo.trim().endsWith("승인완료"));
   if (!active) return { urgent: false, label: null, days: null };
   const now = new Date();
   const due = new Date(deadline);
@@ -97,7 +127,7 @@ export default function ApprovalList() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [chipValue, setChipValue] = useState("ALL");
   // Sorting
-  const [sortField, setSortField] = useState("deadline"); // approvalId | deviceId | deadline
+  const [sortField, setSortField] = useState("submittedAt"); // approvalId | deviceId | deadline | submittedAt
   const [sortOrder, setSortOrder] = useState("asc"); // asc | desc
 
   // Pagination state
@@ -171,7 +201,7 @@ export default function ApprovalList() {
   const chipOptions = useMemo(() => {
     if (filterField === "categoryName") return ["ALL", ...uniqueCategories];
     if (filterField === "userName") return ["ALL", ...uniqueApplicants];
-    if (filterField === "approvalInfo") return ["ALL", "승인대기", "진행중", "승인완료", "반려", "취소"];
+    if (filterField === "approvalInfo") return ["ALL", "승인대기", "1차승인완료", "승인완료", "반려", "취소"];
     return ["ALL"]; // approvalId, deviceId
   }, [filterField, uniqueCategories, uniqueApplicants]);
 
@@ -234,10 +264,18 @@ export default function ApprovalList() {
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortOrder(field === "deadline" ? "asc" : "desc");
+      return;
     }
+
+    const defaultOrderByField = {
+      approvalId: "desc",
+      deviceId: "asc",
+      deadline: "asc",
+      type: "asc",
+      approvalStatus: "asc",
+    };
+    setSortField(field);
+    setSortOrder(defaultOrderByField[field] ?? "asc");
   };
 
   const handleOpenDetail = (approvalId) => {
@@ -347,7 +385,9 @@ export default function ApprovalList() {
           <table>
             <thead>
               <tr>
-                <th>구분</th>
+                <th className="sortable" onClick={() => handleSort('type')}>
+                  구분 {sortField === 'type' && <span className="sort-indicator">{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+                </th>
                 <th className="sortable" onClick={() => handleSort('approvalId')}>
                   신청번호 {sortField === 'approvalId' && <span className="sort-indicator">{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                 </th>
@@ -358,7 +398,9 @@ export default function ApprovalList() {
                 <th className="sortable" onClick={() => handleSort('deadline')}>
                   마감일 {sortField === 'deadline' && <span className="sort-indicator">{sortOrder === 'asc' ? '▲' : '▼'}</span>}
                 </th>
-                <th>상태</th>
+                <th className="sortable" onClick={() => handleSort('approvalStatus')}>
+                  상태 {sortField === 'approvalStatus' && <span className="sort-indicator">{sortOrder === 'asc' ? '▲' : '▼'}</span>}
+                </th>
                 <th>결재선</th>
                 <th>처리자</th>
                 <th>Action</th>
@@ -398,9 +440,7 @@ export default function ApprovalList() {
                   <td>{item.deadlineLabel}</td>
                   <td>
                     <span className={`status-chip ${item.statusClass}`}>
-                      {item.stageLabel && ["승인대기", "진행중"].includes(item.approvalInfo)
-                        ? item.stageLabel
-                        : item.approvalInfo ?? "-"}
+                      {item.stageLabel ?? item.approvalInfo ?? "-"}
                     </span>
                   </td>
                   <td>

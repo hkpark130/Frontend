@@ -22,27 +22,38 @@ const formatDateTime = (value) => {
 
 const statusClassMap = {
   승인대기: "status-progress",
+  진행중: "status-progress",
   "1차승인완료": "status-progress",
   승인완료: "status-complete",
   반려: "status-reject",
   반납: "status-return",
+  취소: "status-unknown",
 };
 
-const getStatusClass = (status) => statusClassMap[status] ?? "status-unknown";
+const getStatusClass = (status) => {
+  if (!status) return "status-unknown";
+  if (typeof status === "string" && status.trim().endsWith("승인완료")) {
+    return "status-progress";
+  }
+  return statusClassMap[status] ?? "status-unknown";
+};
 
 const computeStageLabel = (approvalInfo, approvers = []) => {
   if (!Array.isArray(approvers) || approvers.length === 0) return null;
-  if (approvalInfo !== "승인대기" && approvalInfo !== "1차승인완료") return null;
+  if (approvalInfo !== "승인대기" && !(typeof approvalInfo === "string" && approvalInfo.includes("승인완료"))) {
+    return null;
+  }
   const approved = approvers.filter((item) => item?.isApproved);
   if (approved.length === 0) return null;
   const minStep = Math.min(...approved.map((item) => Number(item.step) || 0).filter((step) => step > 0));
   if (!Number.isFinite(minStep) || minStep <= 0) return null;
-  return `${minStep}차 승인 완료`;
+  return `${minStep}차승인완료`;
 };
 
 const computeUrgency = (deadline, approvalInfo) => {
   if (!deadline) return { urgent: false, label: null };
-  const active = approvalInfo === "승인대기" || approvalInfo === "1차승인완료";
+  const active = approvalInfo === "승인대기"
+    || (typeof approvalInfo === "string" && approvalInfo.trim().endsWith("승인완료"));
   if (!active) return { urgent: false, label: null };
   const now = new Date();
   const due = new Date(deadline);
@@ -55,18 +66,17 @@ const computeUrgency = (deadline, approvalInfo) => {
 };
 
 const statusLabel = (status) => {
-  switch (status) {
-    case "승인완료":
-      return "승인 완료";
-    case "승인대기":
-      return "승인 대기";
-    case "반려":
-      return "반려";
-    case "1차승인완료":
-      return "1차 승인 완료";
-    default:
-      return status ?? "-";
+  if (!status) return "-";
+  if (status === "승인완료") {
+    return "승인완료";
   }
+  if (status === "승인대기") {
+    return "승인 대기";
+  }
+  if (typeof status === "string" && status.trim().endsWith("승인완료")) {
+    return status.trim();
+  }
+  return status;
 };
 
 export default function ApprovalDetail() {
