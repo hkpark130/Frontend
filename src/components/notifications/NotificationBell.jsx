@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "react-oidc-context";
 import { fetchNotifications, markNotificationAsRead, deleteNotification } from "@/api/notifications";
+import './NotificationBell.css';
 
 const REFRESH_INTERVAL = 60_000;
 
@@ -143,11 +144,23 @@ export default function NotificationBell() {
                     className="notification-body"
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(event) => handleNotificationKeyDown(event, notification)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12 }}
                   >
-                    <span className={`notification-icon ${notification.iconClass || ""}`}>
+                    <span
+                      className={`notification-icon ${notification.iconClass || ""}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: 40,
+                        height: 40,
+                        borderRadius: 6,
+                        flex: '0 0 40px'
+                      }}
+                    >
                       {resolveIcon(notification.icon)}
                     </span>
-                    <span className="notification-content">
+                    <span className="notification-content" style={{ display: 'flex', flexDirection: 'column' }}>
                       <span className="notification-subject">{notification.subject}</span>
                       <span className="notification-meta">{notification.date}</span>
                     </span>
