@@ -1,0 +1,82 @@
+
+.register-device-card {
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 2rem 2.5rem;
+}
+
+.register-device-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.register-device-form label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 500;
+  gap: 0.3rem;
+}
+
+.register-device-form input,
+.register-device-form select,
+.register-device-form textarea {
+  margin-top: 0.3rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: #f9fafb;
+}
+
+.register-device-form textarea {
+  min-height: 40px;
+  resize: vertical;
+}
+
+.register-device-form button[type="submit"] {
+  padding: 0.7rem;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.register-device-form button[type="submit"]:hover {
+  background: #1565c0;
+}
+
+.register-device-form button[type="button"] {
+  background: #eee;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.register-device-form button[type="button"]:hover {
+  background: #e3e3e3;
+}
+
+.register-device-form .price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.register-device-form .price-row span {
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.register-device-form .vat-row {
+  margin-top: 6px;
+  display: flex;
+  gap: 16px;
+}

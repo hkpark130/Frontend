@@ -1,0 +1,78 @@
+.approval-highlight {
+  position: relative;
+  padding-left: 10px; /* leave space for the accent bar */
+  transition: background-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+  display: flex;
+  align-items: center;
+  /* make the label stand out: yellow text, slightly larger and bold */
+  color: yellow; /* amber/yellow */
+  font-weight: 600;
+  font-size: 0.98rem;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.05);
+}
+
+/* small vertical accent bar on the left — becomes visible on hover/active */
+.approval-highlight::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffe865, #ffde22);
+  opacity: 0;
+  transform: scaleY(0.95);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+/* show accent when active or hovered */
+.approval-highlight.active::before,
+.approval-highlight:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+/* subtle hover lift */
+.approval-highlight:hover {
+  background: linear-gradient(90deg, rgba(251, 229, 36, 0.08), rgba(255, 233, 34, 0.03));
+  transform: translateX(6px);
+  box-shadow: 0 10px 30px rgba(251, 229, 36, 0.08);
+}
+
+/* subtle pulse to attract attention; apply this by toggling the 'attention' class when appropriate */
+@keyframes approval-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,87,34,0.22); }
+  70% { box-shadow: 0 0 0 10px rgba(255,87,34,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,87,34,0); }
+}
+
+.approval-highlight.attention {
+  animation: approval-pulse 2.4s infinite;
+}
+
+/* style the material icon inside to align nicely */
+.approval-highlight .MuiSvgIcon-root {
+  vertical-align: middle;
+}
+
+/* badge placeholder style if later adding count badge */
+.approval-badge {
+  margin-left: 8px;
+  background: #fffb22;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  line-height: 1;
+}
+
+.approval-highlight.prominent .MuiSvgIcon-root {
+  color: yellow;
+}
+
+/* Respect user's reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .approval-highlight.attention { animation: none; }
+  .approval-highlight, .approval-highlight:hover { transition: none; transform: none; }
+}
