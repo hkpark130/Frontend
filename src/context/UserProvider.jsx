@@ -82,8 +82,12 @@ const UserSync = ({ children }) => {
   );
 };
 
+const onSigninCallback = () => {
+  window.history.replaceState({}, document.title, window.location.pathname);
+};
+
 export const UserProvider = ({ children }) => (
-  <AuthProvider userManager={userManager}>
+  <AuthProvider userManager={userManager} onSigninCallback={onSigninCallback}>
     <UserSync>{children}</UserSync>
   </AuthProvider>
 );
