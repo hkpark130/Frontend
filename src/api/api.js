@@ -7,32 +7,41 @@ const readStoredAccessToken = () => {
   if (typeof window === "undefined") {
     return null;
   }
+
+  const storage = window.localStorage;
+  if (!storage) {
+    return null;
+  }
+
   try {
-    const serializedUser = window.sessionStorage.getItem(OIDC_STORAGE_KEY);
+    const serializedUser = storage.getItem(OIDC_STORAGE_KEY);
     if (!serializedUser) {
       return null;
     }
+
     const parsed = JSON.parse(serializedUser);
     const token = parsed?.access_token;
-    // oidc client stores expires_at as seconds since epoch
     const expiresAt = parsed?.expires_at;
     if (expiresAt) {
       const nowSec = Math.floor(Date.now() / 1000);
       if (Number.isFinite(Number(expiresAt)) && Number(expiresAt) <= nowSec) {
-        // token expired - remove stale storage and return null
         try {
-          window.sessionStorage.removeItem(OIDC_STORAGE_KEY);
+          storage.removeItem(OIDC_STORAGE_KEY);
         } catch {
           /* ignore */
         }
         return null;
       }
     }
-    return token && token.trim().length > 0 ? token : null;
+
+    if (token && token.trim().length > 0) {
+      return token;
+    }
   } catch (error) {
     console.warn("Failed to parse stored OIDC user for access token.", error);
-    return null;
   }
+
+  return null;
 };
 
 let accessToken = readStoredAccessToken();

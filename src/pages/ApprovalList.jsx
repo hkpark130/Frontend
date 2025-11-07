@@ -17,6 +17,7 @@ import {
   getStatusClass,
   isCurrentApprover,
 } from "@/utils/approvals";
+import Spinner from "@/components/Spinner";
 
 const FILTER_OPTIONS = [
   { value: "approvalId", label: "신청번호" },
@@ -47,6 +48,7 @@ export default function ApprovalList() {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [metadata, setMetadata] = useState({ categories: [], applicants: [] });
+  const [actioningApprovalId, setActioningApprovalId] = useState(null);
 
   const currentUsername = useMemo(() => extractUsername(user?.profile), [user]);
 
@@ -197,6 +199,9 @@ export default function ApprovalList() {
   };
 
   const handleQuickApprove = async (item) => {
+    if (actioningApprovalId === item.approvalId) {
+      return;
+    }
     if (item.isTerminal) {
       alert("이미 완료되거나 취소된 결재입니다.");
       return;
@@ -208,6 +213,7 @@ export default function ApprovalList() {
     const confirmed = window.confirm(`승인 ID ${item.approvalId}를 승인하시겠습니까?`);
     if (!confirmed) return;
     const comment = window.prompt("승인 의견을 입력하세요 (선택)", "");
+    setActioningApprovalId(item.approvalId);
     try {
       await approveApproval(item.approvalId, {
         approverUsername: currentUsername,
@@ -218,10 +224,15 @@ export default function ApprovalList() {
     } catch (err) {
       console.error(err);
       alert("승인 처리 중 오류가 발생했습니다. 상세 화면에서 다시 시도해 주세요.");
+    } finally {
+      setActioningApprovalId(null);
     }
   };
 
   const handleQuickReject = async (item) => {
+    if (actioningApprovalId === item.approvalId) {
+      return;
+    }
     if (item.isTerminal) {
       alert("이미 완료되거나 취소된 결재입니다.");
       return;
@@ -234,6 +245,7 @@ export default function ApprovalList() {
     if (comment === null) {
       return;
     }
+    setActioningApprovalId(item.approvalId);
     try {
       await rejectApproval(item.approvalId, {
         approverUsername: currentUsername,
@@ -244,6 +256,8 @@ export default function ApprovalList() {
     } catch (err) {
       console.error(err);
       alert("반려 처리 중 오류가 발생했습니다. 상세 화면에서 다시 시도해 주세요.");
+    } finally {
+      setActioningApprovalId(null);
     }
   };
 
@@ -396,13 +410,23 @@ export default function ApprovalList() {
                   <td>
                     <div className="table-actions">
                       {item.isMine && !item.isTerminal && (
-                        <button type="button" className="primary" onClick={() => handleQuickApprove(item)}>
-                          즉시 승인
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={() => handleQuickApprove(item)}
+                          disabled={actioningApprovalId === item.approvalId}
+                        >
+                          {actioningApprovalId === item.approvalId ? (<><Spinner size={12} /> 처리중...</>) : '즉시 승인'}
                         </button>
                       )}
                       {item.isMine && !item.isTerminal && (
-                        <button type="button" className="danger" onClick={() => handleQuickReject(item)}>
-                          반려
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => handleQuickReject(item)}
+                          disabled={actioningApprovalId === item.approvalId}
+                        >
+                          {actioningApprovalId === item.approvalId ? (<><Spinner size={12} /> 처리중...</>) : '반려'}
                         </button>
                       )}
                       <button type="button" className="outline" onClick={() => handleOpenDetail(item.approvalId)}>

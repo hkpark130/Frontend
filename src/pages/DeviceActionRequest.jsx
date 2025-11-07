@@ -9,6 +9,7 @@ import { fetchDefaultApprovers } from "@/api/approvals";
 import { fetchTags } from "@/api/tags";
 import { DeadlineDateField } from "@/components/form/DateInputs";
 import { useUser } from "@/context/UserProvider";
+import Spinner from "@/components/Spinner";
 
 const ACTION_CONFIG = {
   반납: {
@@ -745,7 +746,7 @@ function DeviceActionRequest({ actionType }) {
                 className="primary"
                 disabled={isSaving || isApproverLoading || isSubmissionBlocked}
               >
-                {isSaving ? "신청 중..." : "신청하기"}
+                {isSaving ? (<><Spinner size={14} />신청 중...</>) : ("신청하기")}
               </button>
             </div>
             <style jsx>{`
@@ -933,6 +934,7 @@ function DeviceActionRequest({ actionType }) {
                   justify-content: center;
                 }
               }
+              /* spinner animation moved into shared Spinner component (SVG animateTransform) */
             `}</style>
           </form>
         )}

@@ -13,7 +13,9 @@ export const userManager = new UserManager({
   redirect_uri: `${window.location.origin}${window.location.pathname}`,
   post_logout_redirect_uri: window.location.origin,
   scope: 'openid profile email',
-  userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+  // userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  silentRenew: true,
   monitorSession: true,
   automaticSilentRenew: true,
 });

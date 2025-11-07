@@ -55,7 +55,9 @@ const UserSync = ({ children }) => {
   const auth = useAuth();
 
   useEffect(() => {
-    // Always sync the api access token: set it when present, clear when absent
+    if (auth.isLoading) {
+      return;
+    }
     try {
       const token = auth.user?.access_token ?? null;
       setApiAccessToken(token);
@@ -64,7 +66,7 @@ const UserSync = ({ children }) => {
       console.warn("Failed to sync API access token", err);
       setApiAccessToken(null);
     }
-  }, [auth.user?.access_token]);
+  }, [auth.isLoading, auth.user?.access_token]);
 
   const user = auth.user ?? null;
   const isLoggedIn = auth.isAuthenticated;

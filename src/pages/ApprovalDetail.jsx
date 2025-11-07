@@ -17,6 +17,7 @@ import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import "dayjs/locale/ko";
+import Spinner from "@/components/Spinner";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -192,6 +193,7 @@ export default function ApprovalDetail() {
   const [tagInput, setTagInput] = useState("");
   const [isTagLoading, setIsTagLoading] = useState(false);
   const [tagFetchError, setTagFetchError] = useState(null);
+  const [isActionProcessing, setIsActionProcessing] = useState(false);
 
   const normalizedUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
   const normalizedDisplayName = useMemo(() => (user?.profile?.name ?? "").trim(), [user]);
@@ -730,6 +732,9 @@ export default function ApprovalDetail() {
   };
 
   const handleApprove = async () => {
+    if (isActionProcessing) {
+      return;
+    }
     if (isTerminalStatus) {
       alert("이미 완료되거나 취소된 결재입니다.");
       return;
@@ -746,6 +751,7 @@ export default function ApprovalDetail() {
       alert("이미 승인을 완료한 단계입니다.");
       return;
     }
+    setIsActionProcessing(true);
     try {
       await approveApproval(Number(approvalId), {
         approverUsername: actionUsername,
@@ -756,10 +762,15 @@ export default function ApprovalDetail() {
     } catch (err) {
       console.error(err);
       alert("승인 처리 중 오류가 발생했습니다.");
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
   const handleReject = async () => {
+    if (isActionProcessing) {
+      return;
+    }
     if (isTerminalStatus) {
       alert("이미 완료되거나 취소된 결재입니다.");
       return;
@@ -776,6 +787,7 @@ export default function ApprovalDetail() {
       alert("현재 단계에서는 반려할 수 없습니다.");
       return;
     }
+    setIsActionProcessing(true);
     try {
       await rejectApproval(Number(approvalId), {
         approverUsername: actionUsername,
@@ -786,6 +798,8 @@ export default function ApprovalDetail() {
     } catch (err) {
       console.error(err);
       alert("반려 처리 중 오류가 발생했습니다.");
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
@@ -799,6 +813,7 @@ export default function ApprovalDetail() {
       alert("댓글 내용을 입력해주세요.");
       return;
     }
+    setIsActionProcessing(true);
     try {
       await addApprovalComment(Number(approvalId), {
         username: author,
@@ -810,6 +825,8 @@ export default function ApprovalDetail() {
     } catch (err) {
       console.error(err);
       alert("댓글 등록 중 오류가 발생했습니다.");
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
@@ -835,6 +852,7 @@ export default function ApprovalDetail() {
       alert("댓글 내용을 입력해주세요.");
       return;
     }
+    setIsActionProcessing(true);
     try {
       await updateApprovalComment(Number(approvalId), editingCommentId, {
         username: normalizedUsername,
@@ -845,6 +863,8 @@ export default function ApprovalDetail() {
     } catch (err) {
       console.error(err);
       alert("댓글 수정 중 오류가 발생했습니다.");
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
@@ -860,6 +880,7 @@ export default function ApprovalDetail() {
     if (!confirmed) {
       return;
     }
+    setIsActionProcessing(true);
     try {
       await deleteApprovalComment(Number(approvalId), commentId, normalizedUsername);
       if (editingCommentId === commentId) {
@@ -869,6 +890,8 @@ export default function ApprovalDetail() {
     } catch (err) {
       console.error(err);
       alert("댓글 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setIsActionProcessing(false);
     }
   };
 
@@ -1294,17 +1317,29 @@ export default function ApprovalDetail() {
               type="button"
               className="primary"
               onClick={handleApprove}
-              disabled={!canApprove}
+              disabled={!canApprove || isActionProcessing}
             >
-              승인
+              {isActionProcessing ? (
+                <>
+                  <Spinner size={14} /> 처리중...
+                </>
+              ) : (
+                "승인"
+              )}
             </button>
             <button
               type="button"
               className="outline"
               onClick={handleReject}
-              disabled={!canReject}
+              disabled={!canReject || isActionProcessing}
             >
-              반려
+              {isActionProcessing ? (
+                <>
+                  <Spinner size={14} /> 처리중...
+                </>
+              ) : (
+                "반려"
+              )}
             </button>
           </div>
           {!canApprove && !canReject && approverPending.length > 0 && (
@@ -1333,8 +1368,8 @@ export default function ApprovalDetail() {
             </label>
           </div>
           <div className="form-actions">
-            <button type="button" className="primary" onClick={handleAddComment} disabled={!normalizedUsername}>
-              댓글 등록
+            <button type="button" className="primary" onClick={handleAddComment} disabled={!normalizedUsername || isActionProcessing}>
+              {isActionProcessing ? <><Spinner size={12} /> 처리중...</> : "댓글 등록"}
             </button>
           </div>
         </div>
@@ -1362,10 +1397,10 @@ export default function ApprovalDetail() {
                       onChange={(event) => setEditingCommentText(event.target.value)}
                     />
                     <div className="comment-actions">
-                      <button type="button" className="primary" onClick={handleUpdateComment}>
-                        저장
+                      <button type="button" className="primary" onClick={handleUpdateComment} disabled={isActionProcessing}>
+                        {isActionProcessing ? <><Spinner size={12} /> 처리중...</> : "저장"}
                       </button>
-                      <button type="button" className="outline" onClick={cancelEditComment}>
+                      <button type="button" className="outline" onClick={cancelEditComment} disabled={isActionProcessing}>
                         취소
                       </button>
                     </div>
@@ -1381,7 +1416,8 @@ export default function ApprovalDetail() {
                     <button
                       type="button"
                       className="danger"
-                      onClick={() => handleDeleteComment(comment.id)}
+                        onClick={() => handleDeleteComment(comment.id)}
+                        disabled={isActionProcessing}
                     >
                       삭제
                     </button>
@@ -1640,6 +1676,7 @@ export default function ApprovalDetail() {
             width: 100%;
           }
         }
+        /* spinner animation moved to shared component (SVG animateTransform) */
       `}</style>
     </div>
   );

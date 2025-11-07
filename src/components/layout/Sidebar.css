@@ -76,3 +76,20 @@
   .approval-highlight.attention { animation: none; }
   .approval-highlight, .approval-highlight:hover { transition: none; transform: none; }
 }
+
+/* Brand / logo */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* background: rgb(255, 255, 255); */
+  border-radius: 0;
+}
+
+.brand-logo {
+  display: block;
+  max-width: 120px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}

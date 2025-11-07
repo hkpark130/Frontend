@@ -13,6 +13,7 @@ import {
 import { useUser } from "@/context/UserProvider";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { fetchDefaultApprovers } from "@/api/approvals";
+import Spinner from "@/components/Spinner";
 
 const toDateString = (value) => (value && isValid(value) ? format(value, "yyyy-MM-dd") : "");
 
@@ -668,7 +669,7 @@ export default function DeviceApplication() {
               취소
             </button>
             <button type="submit" className="primary" disabled={isSaving}>
-              {isSaving ? "신청 중..." : "신청하기"}
+              {isSaving ? (<><Spinner size={14} />신청 중...</>) : ("신청하기")}
             </button>
           </div>
         </form>
