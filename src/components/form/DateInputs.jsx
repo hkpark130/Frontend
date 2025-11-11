@@ -5,6 +5,7 @@ import { PickersDay } from "@mui/x-date-pickers/PickersDay";
 import Box from "@mui/material/Box";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { format, isValid, parse } from "date-fns";
+import "./DateInputs.css";
 
 const toDateString = (value) => (value && isValid(value) ? format(value, "yyyy-MM-dd") : "");
 
@@ -169,7 +170,7 @@ export function RangeDateInput({
               >
                 <div className="range-grid">
                   <div>
-                    <div style={{ fontSize: 16, color: "#6b7280", marginBottom: 2, fontWeight: 800 }}>시작일</div>
+                    <div className="range-calendar-title">시작일</div>
                     <DateCalendar
                       value={draftStart}
                       onChange={(value) => {
@@ -183,7 +184,7 @@ export function RangeDateInput({
                     />
                   </div>
                   <div>
-                    <div style={{ fontSize: 16, color: "#6b7280", marginBottom: 2, fontWeight: 800 }}>종료일</div>
+                    <div className="range-calendar-title">종료일</div>
                     <DateCalendar
                       value={draftEnd}
                       onChange={(value) => setDraftEnd(value)}
@@ -192,9 +193,9 @@ export function RangeDateInput({
                     />
                   </div>
                 </div>
-                <div className="range-actions" style={{ marginTop: 12 }}>
+                <div className="range-actions range-actions--spaced">
                   <button type="button" className="btn-small" onClick={clear}>지우기</button>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div className="range-actions__group">
                     <button type="button" className="btn-small" onClick={() => setOpen(false)}>
                       닫기
                     </button>
@@ -214,73 +215,6 @@ export function RangeDateInput({
         </div>
       </div>
     </div>
-      <style jsx>{`
-      :global(.range-field) {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        width: 100%;
-      }
-      :global(.field-label) {
-        font-weight: 600;
-        font-size: 14px;
-        color: #111827;
-      }
-      :global(.range-overlay) {
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, 0.28);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 50;
-      }
-      :global(.range-dialog) {
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
-        padding: 24px;
-        width: min(640px, 90vw);
-        max-width: 720px;
-      }
-      :global(.range-grid) {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 24px;
-      }
-      :global(.range-actions) {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      :global(.btn-small) {
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
-        padding: 6px 14px;
-        font-size: 14px;
-        background: #fff;
-        cursor: pointer;
-      }
-      :global(.btn-small:hover) {
-        border-color: #2563eb;
-      }
-      :global(.btn-primary) {
-        background: #2563eb;
-        color: #fff;
-        border-color: #1d4ed8;
-      }
-      :global(.btn-primary:hover) {
-        background: #1d4ed8;
-      }
-      @media (max-width: 640px) {
-        :global(.range-dialog) {
-          padding: 20px 16px;
-        }
-        :global(.range-grid) {
-          gap: 16px;
-        }
-      }
-    `}</style>
     </>
   );
 }

@@ -1,15 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { fetchProjects, fetchDeviceDetail, updateDevice } from '@/api/devices';
+import { fetchCategories } from '@/api/categories';
+import { fetchDepartments } from '@/api/departments';
 import { lookupKeycloakUser } from '@/api/users';
 import './RegisterDevice.css';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import { useParams, useNavigate } from 'react-router-dom';
-
-const categories = ['노트북', '데스크탑', '서버', '모니터', '태블릿', '기타'];
-// 프로젝트 리스트는 fetchProjects로 동적 로드
-const departments = ['경영지원부', '개발부', '영업부'];
 
 export default function EditDevice() {
   const navigate = useNavigate();
@@ -62,6 +60,9 @@ export default function EditDevice() {
   const applicantDebounceRef = useRef(null);
   const applicantRequestSeqRef = useRef(0);
 
+  const [categories, setCategories] = useState([]);
+  const [departments, setDepartments] = useState([]);
+
   // 프로젝트 콤보박스 관련 상태
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
@@ -80,6 +81,67 @@ export default function EditDevice() {
     fetchProjects().then((data) => {
       setProjects(Array.isArray(data) ? data : []);
     });
+  }, []);
+
+  // 카테고리/부서 목록 불러오기
+  useEffect(() => {
+    let ignore = false;
+
+    const loadMeta = async () => {
+      try {
+        const [categoryData, departmentData] = await Promise.all([
+          fetchCategories(),
+          fetchDepartments(),
+        ]);
+
+        if (ignore) {
+          return;
+        }
+
+        const categoryNames = Array.isArray(categoryData)
+          ? categoryData
+              .map((item) => {
+                if (typeof item === 'string') {
+                  return item;
+                }
+                if (item && typeof item === 'object') {
+                  return item.name || '';
+                }
+                return '';
+              })
+              .filter((name) => !!name)
+          : [];
+
+        const departmentNames = Array.isArray(departmentData)
+          ? departmentData
+              .map((item) => {
+                if (typeof item === 'string') {
+                  return item;
+                }
+                if (item && typeof item === 'object') {
+                  return item.name || '';
+                }
+                return '';
+              })
+              .filter((name) => !!name)
+          : [];
+
+        setCategories(categoryNames);
+        setDepartments(departmentNames);
+      } catch (error) {
+        console.error('Failed to load categories or departments', error);
+        if (!ignore) {
+          setCategories([]);
+          setDepartments([]);
+        }
+      }
+    };
+
+    loadMeta();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // 디바이스 상세 불러오기 (초기: URL 파라미터에 deviceId가 있으면 자동 조회)

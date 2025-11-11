@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Tooltip from '@/components/Tooltip';
 import SearchIcon from '@/components/icons/SearchIcon';
+import Pagination from '@/components/Pagination';
 import { fetchDisposedDevices, recoverDeviceByAdmin } from '@/api/devices';
 import { useUser } from '@/context/UserProvider';
+import './AdminDeviceTables.css';
 
 const tableColumns = [
   { key: 'categoryName', label: '품목', sortable: true },
@@ -52,60 +54,28 @@ const escapeForCsv = (value) => {
   return text;
 };
 
-const historyTableStyles = {
-  table: {
-    width: '100%',
-    borderCollapse: 'separate',
-    borderSpacing: 0,
-    backgroundColor: 'rgba(17, 24, 39, 0.95)',
-    color: '#f9fafb',
-    borderRadius: 8,
-    overflow: 'hidden',
-    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.35)',
-  },
-  headCell: {
-    textAlign: 'left',
-    padding: '6px 10px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'rgba(31, 41, 55, 0.95)',
-    fontSize: '13px',
-    fontWeight: 600,
-    letterSpacing: '0.01em',
-  },
-  bodyCell: {
-    padding: '6px 10px',
-    fontSize: '13px',
-    color: '#f3f4f6',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-  },
-};
-
-const historyRowStyle = (index) => ({
-  backgroundColor: index % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
-});
-
 const HistoryTable = ({ history }) => {
   if (!history || history.length === 0) {
     return <span>이력 정보가 없습니다.</span>;
   }
 
   return (
-    <table className="history-table" style={historyTableStyles.table}>
+    <table className="admin-history-table">
       <thead>
         <tr>
-          <th style={{ ...historyTableStyles.headCell, width: '15%' }}>사용자</th>
-          <th style={{ ...historyTableStyles.headCell, width: '15%' }}>타입</th>
-          <th style={{ ...historyTableStyles.headCell, width: '40%' }}>프로젝트</th>
-          <th style={{ ...historyTableStyles.headCell, width: '30%' }}>날짜</th>
+          <th className="admin-history-table__head admin-history-table__head--user">사용자</th>
+          <th className="admin-history-table__head admin-history-table__head--type">타입</th>
+          <th className="admin-history-table__head admin-history-table__head--project">프로젝트</th>
+          <th className="admin-history-table__head admin-history-table__head--date">날짜</th>
         </tr>
       </thead>
       <tbody>
         {history.map((item, index) => (
-          <tr key={`${item.username ?? 'unknown'}-${index}`} style={historyRowStyle(index)}>
-            <td style={historyTableStyles.bodyCell}>{item.username ?? '-'}</td>
-            <td style={historyTableStyles.bodyCell}>{item.type ?? '-'}</td>
-            <td style={historyTableStyles.bodyCell}>{item.projectName ?? '-'}</td>
-            <td style={{ ...historyTableStyles.bodyCell, color: '#e5e7eb' }}>
+          <tr key={`${item.username ?? 'unknown'}-${index}`} className="admin-history-table__row">
+            <td className="admin-history-table__cell">{item.username ?? '-'}</td>
+            <td className="admin-history-table__cell">{item.type ?? '-'}</td>
+            <td className="admin-history-table__cell">{item.projectName ?? '-'}</td>
+            <td className="admin-history-table__cell admin-history-table__cell--date">
               {item.modifiedDate ? new Date(item.modifiedDate).toLocaleString('ko-KR') : '-'}
             </td>
           </tr>
@@ -113,80 +83,6 @@ const HistoryTable = ({ history }) => {
       </tbody>
     </table>
   );
-};
-
-const paginationStyles = {
-  wrapper: {
-    marginTop: 16,
-    padding: '12px 16px',
-    backgroundColor: 'transparent',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  infoGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  controlsGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  button: {
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    color: '#f9fafb',
-    border: '1px solid rgba(148, 163, 184, 0.45)',
-    borderRadius: 8,
-    padding: '6px 12px',
-    minWidth: 44,
-    fontSize: 13,
-    fontWeight: 600,
-    transition: 'all 0.12s ease',
-    cursor: 'pointer',
-  },
-  buttonActive: {
-    backgroundColor: 'rgba(31, 41, 55, 0.95)',
-    border: '1px solid rgba(148, 163, 184, 0.65)',
-    color: '#f9fafb',
-    boxShadow: '0 4px 8px rgba(0,0,0,0.24)',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-    cursor: 'not-allowed',
-    filter: 'grayscale(20%)',
-  },
-  select: {
-    backgroundColor: 'rgba(17, 24, 39, 0.9)',
-    color: '#f9fafb',
-    border: '1px solid rgba(148, 163, 184, 0.45)',
-    borderRadius: 8,
-    padding: '4px 10px',
-  },
-};
-
-const buildPageNumbers = (currentPage, totalPages, windowSize = 5) => {
-  if (totalPages <= 0) {
-    return [1];
-  }
-  const half = Math.floor(windowSize / 2);
-  let start = Math.max(1, currentPage - half);
-  let end = Math.min(totalPages, start + windowSize - 1);
-  if (end - start + 1 < windowSize) {
-    start = Math.max(1, end - windowSize + 1);
-  }
-  const pages = [];
-  for (let page = start; page <= end; page += 1) {
-    pages.push(page);
-  }
-  return pages;
 };
 
 export default function AdminDisposalList() {
@@ -221,7 +117,7 @@ export default function AdminDisposalList() {
       setError(null);
 
       const params = {
-        page: currentPage,
+        page: Math.max(0, currentPage - 1),
         size: pageSize,
         filterField: filterKey,
         sortField: sortKey,
@@ -234,14 +130,14 @@ export default function AdminDisposalList() {
         params.filterValue = selectedFilterValue;
       }
 
-  const response = await fetchDisposedDevices(params);
-  const content = Array.isArray(response?.content) ? response.content : [];
-  const totalElements = Number(response?.totalElements ?? 0);
-  const totalPagesValue = Number(response?.totalPages ?? 1);
-  setDevices(content);
-  setTotalItems(Number.isNaN(totalElements) ? 0 : totalElements);
-  setTotalPages(Math.max(1, Number.isNaN(totalPagesValue) ? 1 : totalPagesValue));
-  setMetadata(response?.metadata ?? {});
+      const response = await fetchDisposedDevices(params);
+      const content = Array.isArray(response?.content) ? response.content : [];
+      const totalElements = Number(response?.totalElements ?? 0);
+      const totalPagesValue = Number(response?.totalPages ?? 1);
+      setDevices(content);
+      setTotalItems(Number.isNaN(totalElements) ? 0 : totalElements);
+      setTotalPages(Math.max(1, Number.isNaN(totalPagesValue) ? 1 : totalPagesValue));
+      setMetadata(response?.metadata ?? {});
     } catch (err) {
       console.error(err);
       setError('폐기 장비 목록을 불러오는 중 문제가 발생했습니다.');
@@ -293,16 +189,11 @@ export default function AdminDisposalList() {
     }
   }, [selectedFilterValue, uniqueFilterValues]);
 
-  const pageButtons = useMemo(
-    () => buildPageNumbers(currentPage, totalPages),
-    [currentPage, totalPages],
-  );
-
-  const handlePageSizeChange = (event) => {
-    const nextSize = Number(event.target.value);
-    if (!Number.isNaN(nextSize)) {
-      setPageSize(nextSize);
+  const handlePageSizeChange = (size) => {
+    if (!Number.isFinite(size)) {
+      return;
     }
+    setPageSize(size);
   };
 
   const handlePageChange = (page) => {
@@ -337,7 +228,7 @@ export default function AdminDisposalList() {
 
       const targetSize = Math.max(totalItems, pageSize);
       const params = {
-        page: 1,
+        page: 0,
         size: targetSize,
         filterField: filterKey,
         sortField: sortKey,
@@ -425,7 +316,7 @@ export default function AdminDisposalList() {
     }
 
     const tooltipContent = (
-      <div style={{ whiteSpace: 'pre-wrap' }}>
+      <div className="admin-tooltip-pre">
         {device.spec ? (
           <div>
             <strong>스펙</strong>
@@ -459,7 +350,7 @@ export default function AdminDisposalList() {
     }
 
     return (
-      <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}>
+      <Tooltip content={<div className="admin-tooltip-pre">{device.description}</div>}>
         <span className="table-link">자세히</span>
       </Tooltip>
     );
@@ -492,13 +383,13 @@ export default function AdminDisposalList() {
   };
 
   return (
-    <div className="card">
-      <div className="card-header" style={{ gap: 16 }}>
+    <div className="card admin-device-page">
+      <div className="card-header admin-card-header">
         <div>
           <h2>폐기 장비 리스트</h2>
           <p className="muted">폐기된 장비 이력을 확인하고 필요한 경우 복구할 수 있습니다.</p>
         </div>
-        <div className="card-actions" style={{ display: 'flex', gap: 8 }}>
+        <div className="card-actions admin-card-actions">
           <button
             type="button"
             className="secondary"
@@ -573,7 +464,7 @@ export default function AdminDisposalList() {
                     <th
                       key={column.key}
                       onClick={() => toggleSort(column.key, column.sortable)}
-                      style={{ cursor: column.sortable ? 'pointer' : 'default' }}
+                      className={column.sortable ? 'sortable-header' : undefined}
                     >
                       {column.label}
                       {renderSortIndicator(column.key)}
@@ -603,7 +494,7 @@ export default function AdminDisposalList() {
                       <td>{device.sn ?? '-'}</td>
                       <td>{renderDescriptionCell(device)}</td>
                       <td>
-                        <div className="table-actions" style={{ display: 'flex', gap: 6 }}>
+                        <div className="table-actions">
                           <button
                             type="button"
                             className="primary"
@@ -621,83 +512,16 @@ export default function AdminDisposalList() {
             </table>
           </div>
 
-          <div style={paginationStyles.wrapper}>
-            <div style={paginationStyles.infoGroup}>
-              <span className="muted">총 {totalItems}건</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="muted">페이지당</span>
-                <select value={pageSize} onChange={handlePageSizeChange} style={paginationStyles.select}>
-                  {pageSizeOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div style={paginationStyles.controlsGroup}>
-              <button
-                type="button"
-                onClick={() => handlePageChange(1)}
-                disabled={currentPage === 1}
-                style={{
-                  ...paginationStyles.button,
-                  ...(currentPage === 1 ? paginationStyles.buttonDisabled : {}),
-                }}
-              >
-                {'<<'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                style={{
-                  ...paginationStyles.button,
-                  ...(currentPage === 1 ? paginationStyles.buttonDisabled : {}),
-                }}
-              >
-                {'<'}
-              </button>
-              {pageButtons.map((page) => {
-                const isActive = page === currentPage;
-                return (
-                  <button
-                    type="button"
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    style={{
-                      ...paginationStyles.button,
-                      ...(isActive ? paginationStyles.buttonActive : {}),
-                    }}
-                    aria-current={isActive ? 'page' : undefined}
-                    disabled={isActive}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                style={{
-                  ...paginationStyles.button,
-                  ...(currentPage === totalPages ? paginationStyles.buttonDisabled : {}),
-                }}
-              >
-                {'>'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(totalPages)}
-                disabled={currentPage === totalPages}
-                style={{
-                  ...paginationStyles.button,
-                  ...(currentPage === totalPages ? paginationStyles.buttonDisabled : {}),
-                }}
-              >
-                {'>>'}
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            totalItems={totalItems}
+            disabled={isProcessing}
+          />
         </>
       )}
     </div>

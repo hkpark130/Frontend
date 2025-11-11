@@ -10,6 +10,7 @@ import { fetchTags } from "@/api/tags";
 import { DeadlineDateField } from "@/components/form/DateInputs";
 import { useUser } from "@/context/UserProvider";
 import Spinner from "@/components/Spinner";
+import "./DeviceFormStyles.css";
 
 const ACTION_CONFIG = {
   반납: {
@@ -545,7 +546,7 @@ function DeviceActionRequest({ actionType }) {
                     <input type="text" value={applicantName} readOnly />
                   </label>
                 </div>
-                <div className="applicant-column" style={{ marginBottom: 6 }}>
+                <div className="applicant-column applicant-column--compact">
                   <DeadlineDateField
                     value={form.deadlineDate}
                     onChange={(date) => setForm((prev) => ({ ...prev, deadlineDate: date ?? "" }))}
@@ -587,20 +588,18 @@ function DeviceActionRequest({ actionType }) {
               <div className="form-section-header">
                 <h3>요청 상세</h3>
               </div>
-              <div
-                className="form-section-grid"
-                style={{ display: 'grid', gridTemplateColumns: 'minmax(60px, 15%) 1fr', gap: '12px 24px', alignItems: 'start' }}
-              >
+              <div className="form-section-grid status-grid">
                 <label>
                   {config.statusLabel}
-                  <div style={{ display: 'flex', gap: '24px', marginTop: 8 }}>
+                  <div className="status-radio-group">
                     {statusOptions.map((opt) => {
                       const checked = form.status === opt;
                       const singleOption = statusOptions.length === 1;
+                      const radioClass = `status-radio${singleOption ? " status-radio--disabled" : ""}`;
                       return (
                         <label
                           key={opt}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: singleOption ? 'default' : 'pointer', fontSize: '1rem' }}
+                          className={radioClass}
                         >
                           <input
                             type="radio"
@@ -608,7 +607,7 @@ function DeviceActionRequest({ actionType }) {
                             value={opt}
                             checked={checked}
                             onChange={handleRadioChange}
-                            style={{ width: '20px', height: '20px' }}
+                            className="status-radio-input"
                             disabled={singleOption}
                           />
                           {opt}
@@ -721,7 +720,7 @@ function DeviceActionRequest({ actionType }) {
                 )}
                 {approverFetchError && <p className="error">{approverFetchError}</p>}
               </div>
-              <div className="approver-grid" style={{ gap: 30 }}>
+              <div className="approver-grid approver-grid--spaced">
                 {approverDisplayList.map((approver) => (
                   <label
                     key={`${approver.stage}-${approver.username || approver.displayName}`}
@@ -749,193 +748,6 @@ function DeviceActionRequest({ actionType }) {
                 {isSaving ? (<><Spinner size={14} />신청 중...</>) : ("신청하기")}
               </button>
             </div>
-            <style jsx>{`
-              .applicant-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 24px 32px;
-                align-items: center; /* 수평 정렬 맞춤 (사용자 입력과 반납예정일을 같은 라인으로 정렬) */
-              }
-              .applicant-column {
-                flex: 1 1 320px;
-                max-width: 380px;
-                display: flex;
-                flex-direction: column;
-                gap: 18px;
-              }
-              .applicant-column label {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-              }
-              .applicant-column input {
-                padding: 10px 12px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                font-size: 15px;
-              }
-              .device-info-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 24px 32px;
-                align-items: flex-end;
-                margin-bottom: 8px;
-              }
-              .device-info-label {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                flex: 1 1 220px;
-                max-width: 260px;
-              }
-              .device-info-label input {
-                padding: 10px 12px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                font-size: 15px;
-              }
-              .approver-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 16px 24px;
-              }
-              .approver-field {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                flex: 1 1 220px;
-                max-width: 260px;
-              }
-              .approver-field input {
-                padding: 10px 12px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                font-size: 15px;
-              }
-              .tag-section {
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-              }
-              .tag-input-row {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 12px;
-                align-items: center;
-              }
-              .tag-input-row input {
-                flex: 1 1 240px;
-                min-width: 200px;
-                padding: 10px 12px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                font-size: 14px;
-              }
-              .tag-add-button {
-                padding: 9px 16px;
-              }
-              .tag-hint {
-                font-size: 13px;
-                color: #64748b;
-                margin: 0;
-              }
-              .tag-options {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-              }
-              .tag-chip {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                border-radius: 9999px;
-                border: 1px solid transparent;
-                background: #e5e7eb; /* 연한 회색 배경 (가독성 확보) */
-                color: #111827;
-                padding: 6px 10px;
-                font-size: 13px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-              }
-              .tag-chip:hover {
-                transform: translateY(-1px);
-              }
-              .tag-chip.selected {
-                background: #6b7280; /* 짙은 회색 */
-                border-color: #4b5563;
-                color: #fff;
-                box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-              }
-              .tag-chip .remove-btn {
-                background: transparent;
-                border: none;
-                color: inherit;
-                font-size: 12px;
-                line-height: 1;
-                padding: 0 6px;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .tag-chip .remove-btn:hover,
-              .tag-chip .remove-btn:focus {
-                color: #facc15;
-              }
-              .tag-label {
-                pointer-events: none;
-              }
-              .tag-meta {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 10px;
-              }
-              .tag-status {
-                font-size: 13px;
-                color: #4b5563;
-              }
-              .tag-status.muted {
-                color: #94a3b8;
-              }
-              .tag-status.loading {
-                color: #2563eb;
-              }
-              .tag-status.error {
-                color: #dc2626;
-              }
-              @media (max-width: 900px) {
-                .applicant-grid,
-                .device-info-grid,
-                .approver-grid {
-                  flex-direction: column;
-                  gap: 18px;
-                }
-                .applicant-column,
-                .device-info-label,
-                .approver-field {
-                  max-width: 100%;
-                }
-                .real-user-buttons {
-                  width: 100%;
-                }
-                .real-user-buttons button {
-                  flex: 1 1 0;
-                }
-                .tag-input-row {
-                  flex-direction: column;
-                  align-items: stretch;
-                }
-                .tag-add-button {
-                  width: 100%;
-                  justify-content: center;
-                }
-              }
-              /* spinner animation moved into shared Spinner component (SVG animateTransform) */
-            `}</style>
           </form>
         )}
       </div>

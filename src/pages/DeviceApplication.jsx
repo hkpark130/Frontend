@@ -14,6 +14,7 @@ import { useUser } from "@/context/UserProvider";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { fetchDefaultApprovers } from "@/api/approvals";
 import Spinner from "@/components/Spinner";
+import "./DeviceFormStyles.css";
 
 const toDateString = (value) => (value && isValid(value) ? format(value, "yyyy-MM-dd") : "");
 
@@ -449,12 +450,11 @@ export default function DeviceApplication() {
               <label className="device-info-label">
                 프로젝트
                 <div className="combobox-wrapper" ref={projectComboRef}>
-                  <div className={`combobox${isProjectDropdownOpen ? " open" : ""}`} style={{width: '100%'}}>
+                  <div className={`combobox${isProjectDropdownOpen ? " open" : ""}`}>
                     <button
                       type="button"
                       className="combobox-trigger"
                       onClick={toggleProjectDropdown}
-                      style={{width: '100%'}}
                     >
                       <span>{selectedProjectLabel || "프로젝트를 선택하세요"}</span>
                       <span className="combobox-caret" aria-hidden="true">
@@ -462,15 +462,14 @@ export default function DeviceApplication() {
                       </span>
                     </button>
                     {isProjectDropdownOpen && (
-                      <div className="combobox-panel" style={{width: '100%', minWidth: 0}}>
+                      <div className="combobox-panel combobox-panel--stretch">
                         <input
                           type="text"
-                          className="combobox-search"
+                          className="combobox-search combobox-search--full"
                           placeholder="프로젝트 이름 또는 코드를 검색하세요"
                           value={projectSearchTerm}
                           onChange={(event) => setProjectSearchTerm(event.target.value)}
                           autoFocus
-                          style={{width: '100%'}}
                         />
                         <div className="combobox-list">
                           {filteredProjects.length === 0 && (
@@ -496,129 +495,6 @@ export default function DeviceApplication() {
                 </div>
               </label>
             </div>
-            <style jsx>{`
-              .device-info-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 24px 32px;
-                margin-bottom: 8px;
-                align-items: flex-end;
-              }
-              .device-info-label {
-                display: flex;
-                flex-direction: column;
-                min-width: 180px;
-                margin-bottom: 0;
-                margin-right: 0;
-                gap: 6px;
-                flex: 1 1 220px;
-                max-width: 260px;
-              }
-              .device-info-label input,
-              .device-info-label select,
-              .device-info-label .combobox-wrapper {
-                width: 100%;
-                box-sizing: border-box;
-              }
-              .device-info-label input,
-              .device-info-label select {
-                margin-top: 4px;
-                padding: 8px 10px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                font-size: 15px;
-                background: #f9fafb;
-                min-width: 0;
-                transition: border-color 0.2s;
-              }
-              /* Combobox(프로젝트 선택)도 동일한 radius 적용 */
-              .combobox-trigger {
-                border-radius: 8px !important;
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                padding: 8px 10px;
-                font-size: 15px;
-                width: 100%;
-                text-align: left;
-                transition: border-color 0.2s;
-              }
-              .combobox.open .combobox-trigger {
-                border-bottom-left-radius: 0 !important;
-                border-bottom-right-radius: 0 !important;
-              }
-              .combobox-panel {
-                width: 100% !important;
-                min-width: 0 !important;
-                box-sizing: border-box;
-                border-radius: 0 0 8px 8px !important;
-                border: 1px solid #d1d5db;
-                border-top: none;
-                background: #fff;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                overflow: hidden;
-              }
-              .combobox-search {
-                width: 100% !important;
-                box-sizing: border-box;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                margin-bottom: 6px;
-                padding: 8px 10px;
-                font-size: 15px;
-                background: #f9fafb;
-              }
-              /* combobox-option도 radius 살짝 */
-              .combobox-option {
-                border-radius: 6px;
-                transition: background 0.15s;
-              }
-              .combobox-option:focus,
-              .combobox-option:hover {
-                background: #f1f5f9;
-              }
-              .approver-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 16px 24px;
-              }
-              .approver-field {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                min-width: 180px;
-                flex: 1 1 220px;
-                max-width: 260px;
-              }
-              .approver-field input {
-                padding: 8px 10px;
-                border-radius: 8px;
-                border: 1px solid #d1d5db;
-                font-size: 15px;
-                background: #f9fafb;
-              }
-              @media (max-width: 900px) {
-                .device-info-grid {
-                  flex-direction: column;
-                  gap: 16px 0;
-                }
-                .device-info-label {
-                  max-width: 100%;
-                }
-                .approver-grid {
-                  flex-direction: column;
-                  gap: 12px 0;
-                }
-              }
-              @media (max-width: 900px) {
-                .device-info-grid {
-                  flex-direction: column;
-                  gap: 16px 0;
-                }
-                .device-info-label {
-                  max-width: 100%;
-                }
-              }
-            `}</style>
           </section>
 
           <section className="form-section">

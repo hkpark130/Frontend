@@ -2,13 +2,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { fetchProjects } from '@/api/devices';
+import { fetchCategories } from '@/api/categories';
+import { fetchDepartments } from '@/api/departments';
 import './RegisterDevice.css';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
-
-const categories = ['노트북', '데스크탑', '서버', '모니터', '태블릿', '기타'];
-// 프로젝트 리스트는 fetchProjects로 동적 로드
 
 export default function RegisterDevice() {
   const [form, setForm] = useState({
@@ -16,6 +15,7 @@ export default function RegisterDevice() {
     assetCode: '',
     assetCodeChecked: false,
     project: '',
+    manageDept: '',
     purpose: '',
     status: '정상',
     spec: '',
@@ -30,6 +30,8 @@ export default function RegisterDevice() {
     purchaseDate: '',
   });
   const [projects, setProjects] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const [selectedProjectLabel, setSelectedProjectLabel] = useState('');
@@ -55,6 +57,67 @@ export default function RegisterDevice() {
     fetchProjects().then((data) => {
       setProjects(Array.isArray(data) ? data : []);
     });
+  }, []);
+
+  // 카테고리/부서 목록 불러오기
+  useEffect(() => {
+    let ignore = false;
+
+    const loadMeta = async () => {
+      try {
+        const [categoryData, departmentData] = await Promise.all([
+          fetchCategories(),
+          fetchDepartments(),
+        ]);
+
+        if (ignore) {
+          return;
+        }
+
+        const categoryNames = Array.isArray(categoryData)
+          ? categoryData
+              .map((item) => {
+                if (typeof item === 'string') {
+                  return item;
+                }
+                if (item && typeof item === 'object') {
+                  return item.name || '';
+                }
+                return '';
+              })
+              .filter((name) => !!name)
+          : [];
+
+        const departmentNames = Array.isArray(departmentData)
+          ? departmentData
+              .map((item) => {
+                if (typeof item === 'string') {
+                  return item;
+                }
+                if (item && typeof item === 'object') {
+                  return item.name || '';
+                }
+                return '';
+              })
+              .filter((name) => !!name)
+          : [];
+
+        setCategories(categoryNames);
+        setDepartments(departmentNames);
+      } catch (error) {
+        console.error('Failed to load categories or departments', error);
+        if (!ignore) {
+          setCategories([]);
+          setDepartments([]);
+        }
+      }
+    };
+
+    loadMeta();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // 콤보박스 외부 클릭 시 닫기
@@ -117,6 +180,7 @@ export default function RegisterDevice() {
       assetCode: '',
       assetCodeChecked: false,
       project: '',
+      manageDept: '',
       purpose: '',
       status: '정상',
       spec: '',
@@ -203,6 +267,15 @@ export default function RegisterDevice() {
                   )}
                 </div>
               </div>
+            </label>
+            <label>
+              관리부서
+              <select name="manageDept" value={form.manageDept} onChange={handleChange}>
+                <option value="">선택</option>
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
             </label>
             <label>
               용도

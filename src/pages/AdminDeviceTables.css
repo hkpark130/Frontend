@@ -1,0 +1,88 @@
+.admin-device-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-tooltip-pre {
+  white-space: pre-wrap;
+}
+
+.sortable-header {
+  cursor: pointer;
+}
+
+.sortable-header:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.admin-history-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: rgba(17, 24, 39, 0.95);
+  color: #f9fafb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.admin-history-table thead th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(31, 41, 55, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.admin-history-table__head--user {
+  width: 15%;
+}
+
+.admin-history-table__head--type {
+  width: 15%;
+}
+
+.admin-history-table__head--project {
+  width: 40%;
+}
+
+.admin-history-table__head--date {
+  width: 30%;
+}
+
+.admin-history-table__row:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.admin-history-table__row:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.admin-history-table__cell {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #f3f4f6;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-history-table__cell--date {
+  color: #e5e7eb;
+}

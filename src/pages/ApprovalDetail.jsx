@@ -18,6 +18,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import "dayjs/locale/ko";
 import Spinner from "@/components/Spinner";
+import "./DeviceFormStyles.css";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -928,7 +929,7 @@ export default function ApprovalDetail() {
         <div>
           <h2>결재 상세</h2>
           <p className="muted">결재 ID {approval.approvalId} · {statusLabel(approval.approvalInfo)}</p>
-          <div className="taglist-wrap" style={{ marginTop: 8 }}>
+          <div className="taglist-wrap">
             <span className={`status-chip ${statusClass}`}>{statusLabel(approval.approvalInfo)}</span>
             {stageLabel && <span className="tag tag-outline">{stageLabel}</span>}
             {urgency.urgent && urgency.label && <span className="tag tag-danger">{urgency.label}</span>}
@@ -970,7 +971,7 @@ export default function ApprovalDetail() {
                     placeholder="신청 사유를 입력해 주세요."
                   />
                 </label>
-                <div className="applicant-column" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="applicant-column applicant-column--stacked">
                   <RangeDateInput
                     startDate={editForm.usageStartDate}
                     endDate={editForm.usageEndDate}
@@ -1154,7 +1155,7 @@ export default function ApprovalDetail() {
                   </div>
                 )}
               </div>
-              <div className="form-actions" style={{ marginTop: 12, display: "flex", gap: 8 }}>
+              <div className="form-actions form-actions--tight">
                 <button type="button" className="primary" onClick={handleSaveEdit} disabled={isSavingEdit}>
                   {isSavingEdit ? "저장 중..." : "저장"}
                 </button>
@@ -1200,15 +1201,7 @@ export default function ApprovalDetail() {
               <div>
                 <dt>사유</dt>
                 <dd>
-                  <pre
-                    style={{
-                      overflowY: "auto",
-                      maxHeight: '220px',
-                      whiteSpace: 'pre-wrap',
-                      overflowWrap: 'break-word',
-                      wordBreak: 'break-word',
-                    }}
-                  >
+                  <pre className="detail-reason">
                     {approval.reason ?? "-"}
                   </pre>
                 </dd>
@@ -1293,13 +1286,13 @@ export default function ApprovalDetail() {
         <section className="detail-section action-box">
           <h3>승인/반려 처리</h3>
           {urgency.urgent && urgency.label && (
-            <p className="muted" style={{ marginBottom: 8 }}>
+            <p className="muted muted--spaced">
               ⚠️ {urgency.label} - 빠른 처리가 필요합니다.
             </p>
           )}
           <div className="form-grid">
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <strong style={{ marginRight: 8 }}>처리자</strong>
+            <div className="detail-inline">
+              <strong className="detail-inline__label">처리자</strong>
               <span className="muted">{actionUsername || "-"}</span>
             </div>
             <label className="full-width">
@@ -1352,8 +1345,8 @@ export default function ApprovalDetail() {
         <h3>댓글</h3>
         <div className="comment-form">
           <div className="form-grid">
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <strong style={{ marginRight: 8 }}>작성자</strong>
+            <div className="detail-inline">
+              <strong className="detail-inline__label">작성자</strong>
               <span className="muted">{normalizedUsername || "로그인 필요"}</span>
             </div>
             <label className="full-width">
@@ -1428,256 +1421,6 @@ export default function ApprovalDetail() {
           })}
         </div>
       </section>
-      <style jsx>{`
-        .card-actions {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-
-        .combobox-wrapper {
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .combobox {
-          width: 100%;
-        }
-        .combobox-trigger {
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          background: #f9fafb;
-          padding: 8px 10px;
-          font-size: 15px;
-          width: 100%;
-          text-align: left;
-          transition: border-color 0.2s;
-        }
-        .combobox.open .combobox-trigger {
-          border-bottom-left-radius: 0;
-          border-bottom-right-radius: 0;
-        }
-        .combobox-panel {
-          width: 100%;
-          box-sizing: border-box;
-          border-radius: 0 0 8px 8px;
-          border: 1px solid #d1d5db;
-          border-top: none;
-          background: #fff;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          overflow: hidden;
-          z-index: 10;
-        }
-        .combobox-search {
-          width: 100%;
-          box-sizing: border-box;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          margin-bottom: 6px;
-          padding: 8px 10px;
-          font-size: 15px;
-          background: #f9fafb;
-        }
-        .combobox-option {
-          width: 100%;
-          text-align: left;
-          border-radius: 6px;
-          transition: background 0.15s;
-          padding: 8px 10px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 8px;
-        }
-        .combobox-option:focus,
-        .combobox-option:hover {
-          background: #f1f5f9;
-        }
-        .combobox-option-code {
-          color: #6b7280;
-          font-size: 12px;
-        }
-        .real-user-group {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-        .real-user-group input {
-          flex: 1;
-          padding: 8px 10px;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          background: #f9fafb;
-        }
-        .real-user-buttons {
-          display: flex;
-          gap: 6px;
-        }
-        .real-user-buttons button {
-          min-width: 80px;
-        }
-        .device-info-label {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          min-width: 180px;
-          flex: 1 1 220px;
-          max-width: 260px;
-        }
-        .device-info-label select {
-          margin-top: 4px;
-          padding: 8px 10px;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          background: #f9fafb;
-        }
-        .form-section-grid textarea,
-        .form-section-grid select,
-        .form-section-grid input[type="text"] {
-          padding: 8px 10px;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          background: #f9fafb;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .form-section-grid textarea {
-          resize: vertical;
-          min-height: 120px;
-        }
-        .tag-edit-wrapper {
-          grid-column: 1 / -1;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          padding: 12px;
-          border-radius: 10px;
-          border: 1px solid #e5e7eb;
-          background: #f9fafb;
-        }
-        .tag-edit-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .tag-edit-title {
-          font-weight: 600;
-          font-size: 15px;
-        }
-        .tag-input-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          align-items: center;
-        }
-        .tag-input-row input {
-          flex: 1 1 240px;
-          min-width: 200px;
-          padding: 10px 12px;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          font-size: 14px;
-          background: #fff;
-        }
-        .tag-add-button {
-          padding: 9px 16px;
-        }
-        .tag-hint {
-          font-size: 13px;
-          color: #64748b;
-          margin: 0;
-        }
-        .tag-options {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .tag-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border-radius: 9999px;
-          border: 1px solid transparent;
-          background: #e5e7eb;
-          color: #111827;
-          padding: 6px 10px;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-        .tag-chip:hover {
-          transform: translateY(-1px);
-        }
-        .tag-chip.selected {
-          background: #6b7280;
-          border-color: #4b5563;
-          color: #fff;
-          box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
-        }
-        .tag-chip .remove-btn {
-          background: transparent;
-          border: none;
-          color: inherit;
-          font-size: 12px;
-          line-height: 1;
-          padding: 0 6px;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .tag-chip .remove-btn:hover,
-        .tag-chip .remove-btn:focus {
-          color: #facc15;
-        }
-        .tag-meta {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 10px;
-        }
-        .tag-status {
-          font-size: 13px;
-          color: #4b5563;
-        }
-        .tag-status.muted {
-          color: #94a3b8;
-        }
-        .tag-status.loading {
-          color: #2563eb;
-        }
-        .tag-status.error {
-          color: #dc2626;
-        }
-        .tag-label {
-          pointer-events: none;
-        }
-        .tag-view-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-        .tag-pill {
-          display: inline-flex;
-          align-items: center;
-          padding: 4px 8px;
-          border-radius: 9999px;
-          background: #e5e7eb;
-          font-size: 12px;
-          color: #111827;
-        }
-        @media (max-width: 900px) {
-          .tag-input-row {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .tag-add-button {
-            width: 100%;
-          }
-        }
-        /* spinner animation moved to shared component (SVG animateTransform) */
-      `}</style>
     </div>
   );
 }

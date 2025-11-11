@@ -1,0 +1,21 @@
+.field-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+}
+
+.range-actions--spaced {
+  margin-top: 12px;
+}
+
+.range-actions__group {
+  display: flex;
+  gap: 8px;
+}
+
+.range-calendar-title {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 2px;
+  font-weight: 800;
+}
