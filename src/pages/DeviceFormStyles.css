@@ -10,8 +10,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1 1 220px;
-  max-width: 260px;
+  flex: 1 1;
+  /* max-width: 260px; */
   min-width: 180px;
 }
 
