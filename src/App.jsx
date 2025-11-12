@@ -26,6 +26,7 @@ import MyAssets from './pages/MyAssets'
 import MyApprovalRequests from './pages/MyApprovalRequests'
 import Forbidden from './pages/Forbidden'
 import AdminRoute from '@/components/routing/AdminRoute'
+import OpenStackInstanceSearch from './pages/OpenStackInstanceSearch'
 
 export default function App() {
   return (
@@ -64,6 +65,8 @@ export default function App() {
               <Route path="/mypage/my-assets" element={<MyAssets />} />
               <Route path="/mypage/requests" element={<MyApprovalRequests />} />
               <Route path="/mypage/requests/:approvalId" element={<ApprovalDetail />} />
+              {/* OpenStack */}
+              <Route path="/openstack/instance-search" element={<OpenStackInstanceSearch />} />
               <Route path="/403" element={<Forbidden />} />
             </Routes>
           </div>

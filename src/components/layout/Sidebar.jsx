@@ -9,6 +9,7 @@ export default function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(false)
   const [ledgerOpen, setLedgerOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [openstackOpen, setOpenstackOpen] = useState(true)
   const [myOpen, setMyOpen] = useState(true)
 
   useEffect(() => {
@@ -40,6 +41,24 @@ export default function Sidebar() {
       <nav className="nav-section">
         <NavLink to="/" end className={menuClass}>대시보드</NavLink>
         <NavLink to="/device/list" className={menuClass}>가용장비 리스트</NavLink>
+
+        <div className="nav-group">
+          <div className="menu-toggle" onClick={() => setOpenstackOpen(!openstackOpen)}>
+            <img src="/images/openstack-logo.svg" alt="OpenStack" className="openstack-nav-icon" />
+            <span>OpenStack</span>
+            <span style={{ marginLeft: 'auto', opacity: .8 }}>{openstackOpen ? '▾' : '▸'}</span>
+          </div>
+          {openstackOpen && (
+            <div className="submenu-group">
+              <NavLink
+                to="/openstack/instance-search"
+                className={({ isActive }) => `${submenuClass({ isActive })} openstack-link`}
+              >
+                <span>인스턴스 조회</span>
+              </NavLink>
+            </div>
+          )}
+        </div>
 
         {isAdmin && (
           <>

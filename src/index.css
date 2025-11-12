@@ -106,7 +106,7 @@ button.outline:disabled {
   padding: 8px 10px;
   transition: background 0.2s, color 0.2s;
 }
-.menu { font-weight: 600; }
+.menu { font-weight: 500; }
 .menu:hover,
 .submenu:hover,
 .menu-toggle:hover {
