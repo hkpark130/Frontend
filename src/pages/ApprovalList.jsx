@@ -9,6 +9,7 @@ import { useUser } from "@/context/UserProvider";
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import SearchIcon from '@/components/icons/SearchIcon';
 import Pagination from '@/components/Pagination';
+import Tooltip from "@/components/Tooltip";
 import {
   computeStageLabel,
   computeUrgency,
@@ -26,6 +27,174 @@ const FILTER_OPTIONS = [
   { value: "approvalInfo", label: "신청정보" },
   { value: "deviceId", label: "관리번호" },
 ];
+
+const DEVICE_SEARCH_BATCH_SIZE = 250;
+
+const normalizeString = (value) => {
+  if (value == null) return "";
+  return String(value).trim();
+};
+
+const normalizeDeviceEntries = (approval) => {
+  if (!approval || typeof approval !== "object") {
+    return [];
+  }
+
+  const entries = [];
+  const seen = new Set();
+
+  const pushEntry = (deviceId, categoryName) => {
+    const rawId = deviceId != null ? String(deviceId).trim() : "";
+    const rawCategory = categoryName != null ? String(categoryName).trim() : "";
+    if (!rawId && !rawCategory) {
+      return;
+    }
+    const key = rawId || `${rawCategory || "unknown"}-${entries.length}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    entries.push({
+      id: rawId || null,
+      category: rawCategory || null,
+      key,
+    });
+  };
+
+  const nestedCollections = [
+    approval.deviceItems,
+    approval.devices,
+    approval.deviceList,
+    approval.approvalDevices,
+  ];
+
+  nestedCollections.forEach((collection) => {
+    if (!Array.isArray(collection)) {
+      return;
+    }
+    collection.forEach((device) => {
+      if (!device) {
+        return;
+      }
+      const id =
+        device.deviceId ??
+        device.id ??
+        device.manageId ??
+        device.deviceCode ??
+        device.deviceNo ??
+        device.serialNumber ??
+        device.code;
+      const category =
+        device.categoryName ??
+        device.category ??
+        device.itemName ??
+        device.productName ??
+        device.name ??
+        device.model ??
+        device.type;
+      pushEntry(id, category);
+    });
+  });
+
+  const idCollections = [
+    approval.deviceIds,
+    approval.deviceIdList,
+    approval.deviceCodes,
+  ];
+  const categoryCollections = [
+    approval.categoryNames,
+    approval.categoryList,
+    approval.deviceCategories,
+  ];
+
+  idCollections.forEach((ids, idx) => {
+    if (!Array.isArray(ids)) {
+      return;
+    }
+    ids.forEach((deviceId, index) => {
+      const categories = categoryCollections[idx];
+      const categoryName = Array.isArray(categories)
+        ? categories[index]
+        : approval.categoryName;
+      pushEntry(deviceId, categoryName);
+    });
+  });
+
+  if (entries.length === 0 && typeof approval.deviceId === "string") {
+    const raw = approval.deviceId
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (raw.length > 1) {
+      raw.forEach((id) => pushEntry(id, approval.categoryName));
+    } else {
+      pushEntry(approval.deviceId, approval.categoryName);
+    }
+  } else if (entries.length === 0 && typeof approval.deviceId === "number") {
+    pushEntry(approval.deviceId, approval.categoryName);
+  }
+
+  if (entries.length === 0 && approval.categoryName) {
+    pushEntry(null, approval.categoryName);
+  }
+
+  return entries;
+};
+
+const matchesDeviceKeyword = (approval, keyword) => {
+  if (!keyword) {
+    return true;
+  }
+  const lower = keyword.toLowerCase();
+  if (normalizeString(approval?.deviceId).toLowerCase().includes(lower)) {
+    return true;
+  }
+  return normalizeDeviceEntries(approval).some((entry) =>
+    normalizeString(entry.id).toLowerCase().includes(lower),
+  );
+};
+
+const buildDeviceSummary = (approval) => {
+  const entries = normalizeDeviceEntries(approval);
+  if (entries.length === 0) {
+    const fallbackId = approval?.deviceId != null ? String(approval.deviceId) : "-";
+    return {
+      entries,
+      count: 0,
+      hasMultiple: false,
+      primary: null,
+      primaryId: fallbackId || "-",
+      plusCount: 0,
+      secondaryLabel: approval?.categoryName ?? "-",
+    };
+  }
+
+  const [primary] = entries;
+  const count = entries.length;
+  const hasMultiple = count > 1;
+  const primaryId = primary.id && primary.id.length > 0 ? primary.id : "-";
+  const plusCount = hasMultiple ? count - 1 : 0;
+
+  let secondaryLabel;
+  if (hasMultiple) {
+    const base = primary.category ?? approval?.categoryName ?? "";
+    secondaryLabel = base
+      ? `${base} 외 ${plusCount}대`
+      : `${count}대 신청`;
+  } else {
+    secondaryLabel = primary.category ?? approval?.categoryName ?? "-";
+  }
+
+  return {
+    entries,
+    count,
+    hasMultiple,
+    primary,
+    primaryId,
+    plusCount,
+    secondaryLabel,
+  };
+};
 
 export default function ApprovalList() {
   const navigate = useNavigate();
@@ -60,32 +229,65 @@ export default function ApprovalList() {
   }, [query]);
 
   const loadApprovals = useCallback(async () => {
+    const isDeviceIdSearch = filterField === "deviceId" && debouncedQuery.length > 0;
     try {
       setIsLoading(true);
       setError(null);
+
       const params = {
-        page: currentPage,
-        size: pageSize,
-        filterField,
+        page: isDeviceIdSearch ? 1 : currentPage,
+        size: isDeviceIdSearch ? DEVICE_SEARCH_BATCH_SIZE : pageSize,
         sortField,
         sortOrder,
       };
-      if (debouncedQuery) {
-        params.keyword = debouncedQuery;
+
+      if (!isDeviceIdSearch) {
+        params.filterField = filterField;
+        if (debouncedQuery) {
+          params.keyword = debouncedQuery;
+        }
       }
       if (chipValue !== "ALL") {
         params.chipValue = chipValue;
       }
+
       const data = await fetchPendingApprovals(params);
       const content = Array.isArray(data?.content) ? data.content : [];
-      setApprovals(content);
-      setTotalItems(Number(data?.totalElements ?? 0));
-      setTotalPages(Math.max(1, Number(data?.totalPages ?? 1)));
       const meta = data?.metadata ?? {};
       setMetadata({
         categories: Array.isArray(meta?.categories) ? meta.categories : [],
         applicants: Array.isArray(meta?.applicants) ? meta.applicants : [],
       });
+
+      if (isDeviceIdSearch) {
+        let aggregated = [...content];
+        const totalPagesFromApi = Math.max(1, Number(data?.totalPages ?? 1));
+        for (let pageIndex = 2; pageIndex <= totalPagesFromApi; pageIndex += 1) {
+          const nextData = await fetchPendingApprovals({
+            ...params,
+            page: pageIndex,
+          });
+          if (Array.isArray(nextData?.content)) {
+            aggregated = aggregated.concat(nextData.content);
+          }
+        }
+
+        const matched = aggregated.filter((item) => matchesDeviceKeyword(item, debouncedQuery));
+        const totalMatches = matched.length;
+        const computedTotalPages = Math.max(1, Math.ceil(totalMatches / pageSize));
+        const safePage = Math.min(currentPage, computedTotalPages);
+        const start = (safePage - 1) * pageSize;
+        const sliced = matched.slice(start, start + pageSize);
+
+        setApprovals(sliced);
+        setTotalItems(totalMatches);
+        setTotalPages(computedTotalPages);
+        return;
+      }
+
+      setApprovals(content);
+      setTotalItems(Number(data?.totalElements ?? 0));
+      setTotalPages(Math.max(1, Number(data?.totalPages ?? 1)));
     } catch (err) {
       console.error(err);
       setError("결재 목록을 불러오는 중 문제가 발생했습니다.");
@@ -153,6 +355,7 @@ export default function ApprovalList() {
           (approver) => approver && !approver.isApproved && !approver.isRejected,
         );
         const isMine = isCurrentApprover(item.approvers, currentUsername);
+        const deviceSummary = buildDeviceSummary(item);
         return {
           raw: item,
           approvalId: item.approvalId,
@@ -172,6 +375,7 @@ export default function ApprovalList() {
           nextPending,
           isMine,
           isTerminal: ["승인완료", "반려", "취소"].includes(item.approvalInfo ?? ""),
+          deviceSummary,
         };
       }),
     [approvalsList, currentUsername],
@@ -368,10 +572,35 @@ export default function ApprovalList() {
                     </div>
                   </td>
                   <td>
-                    <div className="stack">
-                      <strong>{item.deviceId ?? "-"}</strong>
-                      <span className="muted small">{item.categoryName ?? "-"}</span>
-                    </div>
+                    {item.deviceSummary.count > 1 ? (
+                      <Tooltip
+                        content={(
+                          <div className="device-tooltip-list">
+                            {item.deviceSummary.entries.map((device) => (
+                              <div key={device.key} className="device-tooltip-item">
+                                <strong>{device.id ?? "-"}</strong>
+                                <span>{device.category ?? "-"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      >
+                        <div className="stack device-stack">
+                          <strong>
+                            {item.deviceSummary.primaryId}
+                            {item.deviceSummary.hasMultiple && (
+                              <span className="device-extra-count">+{item.deviceSummary.plusCount}</span>
+                            )}
+                          </strong>
+                          <span className="muted small">{item.deviceSummary.secondaryLabel}</span>
+                        </div>
+                      </Tooltip>
+                    ) : (
+                      <div className="stack">
+                        <strong>{item.deviceId ?? "-"}</strong>
+                        <span className="muted small">{item.categoryName ?? "-"}</span>
+                      </div>
+                    )}
                   </td>
                   <td>{item.userName ?? "-"}</td>
                   <td>{item.deadlineLabel}</td>

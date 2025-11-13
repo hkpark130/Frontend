@@ -1,13 +1,12 @@
-
-
-import React, { useState, useRef, useEffect } from 'react';
-import { fetchProjects } from '@/api/devices';
-import { fetchCategories } from '@/api/categories';
-import { fetchDepartments } from '@/api/departments';
-import './RegisterDevice.css';
-import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs from 'dayjs';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchProjects } from "@/api/devices";
+import { fetchCategories } from "@/api/categories";
+import { fetchDepartments } from "@/api/departments";
+import ProjectCombobox from "@/components/form/ProjectCombobox";
+import "./RegisterDevice.css";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
 
 export default function RegisterDevice() {
   const [form, setForm] = useState({
@@ -15,6 +14,7 @@ export default function RegisterDevice() {
     assetCode: '',
     assetCodeChecked: false,
     project: '',
+    projectCode: '',
     manageDept: '',
     purpose: '',
     status: '정상',
@@ -32,10 +32,6 @@ export default function RegisterDevice() {
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [projectSearchTerm, setProjectSearchTerm] = useState('');
-  const [selectedProjectLabel, setSelectedProjectLabel] = useState('');
-  const projectComboRef = useRef(null);
 
   // 관리번호 중복체크 (실제 API 연동 필요)
   const checkAssetCode = () => {
@@ -46,12 +42,6 @@ export default function RegisterDevice() {
   };
 
   // 프로젝트 필터링
-  const filteredProjects = projects.filter(
-    (p) =>
-      (p.name && p.name.toLowerCase().includes(projectSearchTerm.toLowerCase())) ||
-      (p.code && p.code.toLowerCase().includes(projectSearchTerm.toLowerCase()))
-  );
-
   // 프로젝트 리스트 불러오기
   useEffect(() => {
     fetchProjects().then((data) => {
@@ -120,31 +110,44 @@ export default function RegisterDevice() {
     };
   }, []);
 
-  // 콤보박스 외부 클릭 시 닫기
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (projectComboRef.current && !projectComboRef.current.contains(event.target)) {
-        setIsProjectDropdownOpen(false);
+  const selectedProject = useMemo(() => {
+    const name = typeof form.project === "string" ? form.project.trim() : "";
+    const code = typeof form.projectCode === "string" ? form.projectCode.trim() : "";
+    if (!name && !code) {
+      return null;
+    }
+    const match = projects.find((project) => {
+      const projectName = project?.name?.trim() ?? "";
+      const projectCode = project?.code?.trim() ?? "";
+      if (name && code) {
+        return projectName === name && projectCode === code;
       }
+      if (name) {
+        return projectName === name;
+      }
+      return projectCode === code;
+    });
+    if (match) {
+      return {
+        id: match.id ?? null,
+        name: match.name ?? "",
+        code: match.code ?? "",
+      };
     }
-    if (isProjectDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isProjectDropdownOpen]);
+    return {
+      id: null,
+      name,
+      code,
+    };
+  }, [form.project, form.projectCode, projects]);
 
-  const toggleProjectDropdown = () => {
-    setIsProjectDropdownOpen((open) => !open);
-    setProjectSearchTerm('');
-  };
-
-  const handleProjectSelect = (project) => {
-    setForm((prev) => ({ ...prev, project: project.name }));
-    setSelectedProjectLabel(project.name + (project.code ? ` (${project.code})` : ''));
-    setIsProjectDropdownOpen(false);
-  };
+  const handleProjectSelect = useCallback((project) => {
+    setForm((prev) => ({
+      ...prev,
+      project: project?.name ?? '',
+      projectCode: project?.code ?? '',
+    }));
+  }, []);
   const handlePriceChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
     setForm((prev) => ({ ...prev, price: value }));
@@ -154,9 +157,6 @@ export default function RegisterDevice() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    if (name === 'project') {
-      setSelectedProjectLabel(value);
-    }
   };
 
   // 라디오 버튼 핸들러
@@ -180,6 +180,7 @@ export default function RegisterDevice() {
       assetCode: '',
       assetCodeChecked: false,
       project: '',
+      projectCode: '',
       manageDept: '',
       purpose: '',
       status: '정상',
@@ -205,7 +206,6 @@ export default function RegisterDevice() {
             <label>
               품목
               <select name="category" value={form.category} onChange={handleChange} required>
-                <option value="">선택</option>
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
@@ -221,57 +221,19 @@ export default function RegisterDevice() {
             {/* 프로젝트 (커스텀 콤보박스) */}
             <label className="device-info-label">
               프로젝트
-              <div className="combobox-wrapper" ref={projectComboRef}>
-                <div className={`combobox${isProjectDropdownOpen ? " open" : ""}`} style={{width: '100%'}}>
-                  <button
-                    type="button"
-                    className="combobox-trigger"
-                    onClick={toggleProjectDropdown}
-                    style={{width: '100%'}}
-                  >
-                    <span>{selectedProjectLabel || "프로젝트를 선택하세요"}</span>
-                    <span className="combobox-caret" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {isProjectDropdownOpen && (
-                    <div className="combobox-panel" style={{width: '100%', minWidth: 0}}>
-                      <input
-                        type="text"
-                        className="combobox-search"
-                        placeholder="프로젝트 이름 또는 코드를 검색하세요"
-                        value={projectSearchTerm}
-                        onChange={(event) => setProjectSearchTerm(event.target.value)}
-                        autoFocus
-                        style={{width: '100%'}}
-                      />
-                      <div className="combobox-list">
-                        {filteredProjects.length === 0 && (
-                          <p className="combobox-empty">검색 결과가 없습니다.</p>
-                        )}
-                        {filteredProjects.map((project) => (
-                          <button
-                            type="button"
-                            key={project.id}
-                            className="combobox-option"
-                            onClick={() => handleProjectSelect(project)}
-                          >
-                            <span className="combobox-option-name">{project.name}</span>
-                            {project.code && (
-                              <span className="combobox-option-code">{project.code}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ProjectCombobox
+                projects={projects}
+                selectedProject={selectedProject}
+                onSelect={handleProjectSelect}
+                disabled={projects.length === 0}
+                searchPlaceholder="프로젝트 이름 또는 코드를 검색하세요"
+                listClassName="combobox-list"
+              />
             </label>
             <label>
               관리부서
               <select name="manageDept" value={form.manageDept} onChange={handleChange}>
-                <option value="">선택</option>
+
                 {departments.map((dept) => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
@@ -280,7 +242,7 @@ export default function RegisterDevice() {
             <label>
               용도
               <select name="purpose" value={form.purpose} onChange={handleChange}>
-                <option value="">선택</option>
+
                 <option value="개발">개발</option>
                 <option value="사무">사무</option>
               </select>

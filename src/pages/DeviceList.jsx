@@ -5,6 +5,14 @@ import Pagination from '@/components/Pagination';
 import { fetchAvailableDevices } from "@/api/devices";
 import SearchIcon from '@/components/icons/SearchIcon';
 
+const RETURN_PENDING_STATUSES = new Set([
+  "승인대기",
+  "진행중",
+  "1차승인완료",
+  "2차승인완료",
+  "승인완료",
+]);
+
 const columns = [
   { key: "categoryName", label: "품목" },
   { key: "id", label: "관리번호" },
@@ -22,6 +30,58 @@ const filterOptions = [
   { value: "tags", label: "태그" },
 ];
 
+const normalizeId = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return typeof value === "string" ? value : value.toString();
+};
+
+const isReturnPending = (device) => {
+  if (!device || device.approvalType !== "반납") {
+    return false;
+  }
+
+  const normalized = typeof device.approvalInfo === "string"
+    ? device.approvalInfo.trim()
+    : "";
+  if (!normalized) {
+    return false;
+  }
+
+  const canonical = normalized.replace(/\s+/g, "");
+  const matchesReturnStatuses = RETURN_PENDING_STATUSES.has(canonical) || RETURN_PENDING_STATUSES.has(normalized);
+  if (!matchesReturnStatuses) {
+    return false;
+  }
+
+  const isApproved = canonical === "승인완료" || normalized === "승인완료";
+  if (isApproved) {
+    const usableFlag = device?.isUsable;
+    const isMarkedUsable = usableFlag === true || usableFlag === 1 || usableFlag === "1";
+    if (isMarkedUsable) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const formatDeadline = (iso) => {
+  if (!iso) return "미정";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(d);
+  } catch {
+    return iso;
+  }
+};
+
 export default function DeviceList() {
   const [devices, setDevices] = useState([]);
   const [search, setSearch] = useState("");
@@ -36,6 +96,7 @@ export default function DeviceList() {
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
   const lastAppliedKeyRef = useRef(null);
@@ -65,6 +126,19 @@ export default function DeviceList() {
       const data = await fetchAvailableDevices(params);
       const content = Array.isArray(data?.content) ? data.content : [];
       setDevices(content);
+      setSelectedDeviceIds((prev) => {
+        const deduped = Array.from(new Set(prev.map(normalizeId).filter(Boolean)));
+        if (deduped.length === 0) {
+          return deduped;
+        }
+        return deduped.filter((id) => {
+          const match = content.find((device) => normalizeId(device?.id) === id);
+          if (!match) {
+            return true;
+          }
+          return !isReturnPending(match);
+        });
+      });
       setTotalItems(Number(data?.totalElements ?? 0));
       setTotalPages(Math.max(1, Number(data?.totalPages ?? 1)));
       const meta = data?.metadata ?? {};
@@ -174,30 +248,155 @@ export default function DeviceList() {
     }
   }, [requestedCategory, chipOptions]);
 
-  const handleApply = (deviceId) => {
-    navigate(`/device/${deviceId}/apply`);
+  const toggleSelection = (device, disabled) => {
+    if (disabled || !device || device.id === null || device.id === undefined) {
+      return;
+    }
+    const normalized = normalizeId(device.id);
+    if (!normalized) {
+      return;
+    }
+    setSelectedDeviceIds((prev) => {
+      if (prev.includes(normalized)) {
+        return prev.filter((id) => id !== normalized);
+      }
+      return [...prev, normalized];
+    });
   };
 
-  const formatDeadline = (iso) => {
-    if (!iso) return "미정";
-    try {
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return iso;
-      return new Intl.DateTimeFormat('ko-KR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(d);
-    } catch {
-      return iso;
+  const handleBulkApply = () => {
+    if (selectedDeviceIds.length === 0) {
+      return;
     }
+    const uniqueIds = Array.from(new Set(selectedDeviceIds));
+    const query = new URLSearchParams({ deviceIds: uniqueIds.join(",") }).toString();
+    navigate(`/device/apply?${query}`, { state: { deviceIds: uniqueIds } });
   };
+
+  // Render rows separately to keep JSX clean and avoid nested-paren parsing issues
+  const rows = devices.length === 0
+    ? (
+      <tr>
+        <td colSpan={columns.length + 1} className="empty">
+          조건에 맞는 장비가 없습니다.
+        </td>
+      </tr>
+    ) : devices.map((device) => {
+      const disabled = isReturnPending(device);
+      const normalizedId = normalizeId(device?.id);
+      const checked = normalizedId ? selectedDeviceIds.includes(normalizedId) : false;
+
+      const handleRowClick = (e) => {
+        if (e.target.closest('input,button,a,select,textarea')) return;
+        toggleSelection(device, disabled);
+      };
+
+      return (
+        <tr
+          key={device.id}
+          onClick={handleRowClick}
+          className={checked ? 'selected-row' : ''}
+          style={{ cursor: disabled ? 'not-allowed' : 'pointer', backgroundColor: checked ? '#f3f9ff' : undefined }}
+        >
+          <td>
+            <input
+              type="radio"
+              name={`device-selection-${device.id}`}
+              className="selection-radio"
+              checked={checked}
+              onClick={(e) => { e.stopPropagation(); toggleSelection(device, disabled); }}
+              onChange={() => {}}
+              disabled={disabled}
+              aria-disabled={disabled}
+              aria-label={`${device.categoryName ?? '장비'} ${device.id} 선택`}
+              style={{ width: 20, height: 20 }}
+            />
+          </td>
+          <td>{device.categoryName ?? "-"}</td>
+          <td>{device.id}</td>
+          <td>
+            {device.purpose ? (
+              (device.spec && device.spec.toString().trim()) ? (
+                <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.spec}</div>}>
+                  <div className="table-link" style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
+                </Tooltip>
+              ) : (
+                <div style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
+              )
+            ) : (
+              "-"
+            )}
+          </td>
+          <td>
+            {(device.tags ?? []).length > 0 ? (
+              <div className="tags-list">
+                {device.tags.map((tag) => (
+                  <span key={tag} className="tag">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              "-"
+            )}
+          </td>
+          <td>
+            {device.description ? (
+              <Tooltip
+                content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}
+                maxWidth={480}
+                maxHeight={320}
+              >
+                <div className="table-link" style={{ display: 'block', width: '100%' }}>
+                  <span
+                    title={typeof device.description === 'string' ? '' : undefined}
+                    style={{
+                      display: 'inline-block',
+                      maxWidth: 300,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      verticalAlign: 'bottom',
+                    }}
+                  >
+                    {device.description}
+                  </span>
+                </div>
+              </Tooltip>
+            ) : (
+              "-"
+            )}
+          </td>
+          <td>
+            {isReturnPending(device)
+              ? `반납예정 ${formatDeadline(device.deadline)}`
+              : "사용 가능"}
+          </td>
+        </tr>
+      );
+    });
 
   return (
     <div className="card">
       <div className="card-header">
         <div>
           <h2>가용 장비 목록</h2>
+        </div>
+        <div className="card-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {selectedDeviceIds.length > 0 && (
+            <span className="muted" style={{ fontSize: 13 }}>
+              선택 {selectedDeviceIds.length}대
+            </span>
+          )}
+          <button
+            type="button"
+            className="primary"
+            onClick={handleBulkApply}
+            disabled={selectedDeviceIds.length === 0 || isLoading}
+            aria-disabled={selectedDeviceIds.length === 0 || isLoading}
+          >
+            사용 신청
+          </button>
         </div>
       </div>
 
@@ -252,103 +451,14 @@ export default function DeviceList() {
           <table>
             <thead>
               <tr>
+                <th aria-label="선택" />
                 {columns.map((column) => (
                   <th key={column.key}>{column.label}</th>
                 ))}
-                <th>신청</th>
               </tr>
             </thead>
             <tbody>
-              {devices.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length + 1} className="empty">
-                    조건에 맞는 장비가 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                devices.map((device) => (
-                  <tr key={device.id}>
-                    <td>{device.categoryName ?? "-"}</td>
-                    <td>{device.id}</td>
-                    <td>
-                      {device.purpose ? (
-                        (device.spec && device.spec.toString().trim()) ? (
-                          <Tooltip content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.spec}</div>}>
-                            <div className="table-link" style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
-                          </Tooltip>
-                        ) : (
-                          <div style={{ display: 'block', width: '100%' }}>{device.purpose}</div>
-                        )
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td>
-                      {(device.tags ?? []).length > 0 ? (
-                        <div className="tags-list">
-                          {device.tags.map((tag) => (
-                            <span key={tag} className="tag">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td>
-                      {device.description ? (
-                        <Tooltip
-                          content={<div style={{ whiteSpace: 'pre-wrap' }}>{device.description}</div>}
-                          maxWidth={480}
-                          maxHeight={320}
-                        >
-                          <div className="table-link" style={{ display: 'block', width: '100%' }}>
-                            <span
-                              title={typeof device.description === 'string' ? '' : undefined}
-                              style={{
-                                display: 'inline-block',
-                                maxWidth: 300,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'bottom',
-                              }}
-                            >
-                              {device.description}
-                            </span>
-                          </div>
-                        </Tooltip>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td>
-                      {device.approvalType === "반납" && (device.approvalInfo === "승인대기" || device.approvalInfo === "1차승인완료")
-                        ? `반납예정 ${formatDeadline(device.deadline)}`
-                        : "사용 가능"}
-                    </td>
-                    <td>
-                      {(() => {
-                        const isReturnPending =
-                          device.approvalType === "반납" &&
-                          (device.approvalInfo === "승인대기" || device.approvalInfo === "1차승인완료");
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => handleApply(device.id)}
-                            className="primary"
-                            disabled={isReturnPending}
-                            aria-disabled={isReturnPending}
-                          >
-                            사용 신청
-                          </button>
-                        );
-                      })()}
-                    </td>
-                  </tr>
-                ))
-              )}
+              {rows}
             </tbody>
           </table>
           <Pagination

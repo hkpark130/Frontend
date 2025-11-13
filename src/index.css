@@ -316,7 +316,17 @@ button.outline:disabled {
 }
 
 .table-wrapper {
+  position: relative;
   overflow-x: auto;
+}
+
+.selection-radio {
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.selection-radio:disabled {
+  accent-color: #9ca3af;
 }
 
 table {
@@ -482,8 +492,44 @@ tr:hover {
 }
 
 .applicant-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px; /* widen space between left/right fields */
+  grid-template-columns: minmax(160px, 0.2fr) minmax(280px, 0.5fr) minmax(200px, 0.3fr);
+  gap: 24px;
+  align-items: end;
+}
+
+.applicant-grid--detail {
+  grid-template-columns: minmax(360px, 1.25fr) minmax(280px, 1fr);
+  gap: 18px 24px;
+  align-items: stretch;
+}
+
+.applicant-grid--detail .stretch {
+  grid-column: 1 / -1;
+}
+
+.applicant-grid--detail textarea {
+  min-height: 168px;
+}
+
+.applicant-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.applicant-field .range-field,
+.applicant-field .range-field .combobox-wrapper,
+.applicant-field .deadline-field {
+  width: 100%;
+}
+
+.applicant-field--deadline .deadline-field {
+  padding: 0;
+}
+
+.applicant-field--deadline .deadline-field .MuiTextField-root {
+  width: 100%;
 }
 
 .applicant-column {
@@ -492,9 +538,36 @@ tr:hover {
   gap: 18px;
 }
 
+.applicant-column--user,
+.applicant-column--usage,
+.applicant-column--deadline {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .applicant-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .applicant-grid--detail {
+    grid-template-columns: 1fr;
+  }
+}
+
 .applicant-column label,
 .applicant-column .range-field {
   width: 100%;
+  gap: 8px; 
+}
+
+.applicant-grid--return .applicant-column .range-field {
+  gap: 0;
+}
+
+.applicant-grid--disposal .applicant-column .range-field {
+  gap: 0px;
 }
 
 
@@ -555,11 +628,8 @@ label textarea[readonly] {
 }
 
 .combobox-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 20;
+  position: fixed;
+  z-index: 1000;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -568,6 +638,17 @@ label textarea[readonly] {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.combobox-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 /* Range panel layout for date range input */
@@ -732,7 +813,7 @@ textarea {
 .range-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0px;
 }
 
 .range-field.mui .MuiTextField-root {
@@ -811,6 +892,19 @@ textarea {
   gap: 12px;
 }
 
+.form-actions--tight {
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  width: 100%;
+}
+
+.form-actions--tight button {
+  min-width: 120px;
+}
+
 .outline {
   background: #fff;
   color: #111827;
@@ -822,6 +916,37 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 20px;
   margin-bottom: 24px;
+}
+
+.detail-grid--approval {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.detail-section--applicant,
+.detail-section--devices,
+.detail-section--flow {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .detail-grid--approval {
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
+    grid-template-areas:
+      "applicant flow"
+      "devices devices";
+  }
+
+  .detail-section--applicant {
+    grid-area: applicant;
+  }
+
+  .detail-section--flow {
+    grid-area: flow;
+  }
+
+  .detail-section--devices {
+    grid-area: devices;
+  }
 }
 
 .detail-section {
@@ -1184,6 +1309,35 @@ textarea {
 
 .row-urgent {
   background: rgba(254, 243, 199, 0.4);
+}
+
+.device-extra-count {
+  margin-left: 6px;
+  font-size: 0.85em;
+  color: #2563eb;
+}
+
+.device-tooltip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.device-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.device-tooltip-item strong {
+  font-weight: 700;
+  color: #ffffff;
+  min-width: 110px;
+}
+
+.device-tooltip-item span {
+  color: #e2e8f0;
 }
 
 @media (max-width: 1024px) {

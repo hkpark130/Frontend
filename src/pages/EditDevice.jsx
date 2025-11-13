@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchProjects, fetchDeviceDetail, updateDevice } from '@/api/devices';
 import { fetchCategories } from '@/api/categories';
 import { fetchDepartments } from '@/api/departments';
 import { lookupKeycloakUser } from '@/api/users';
+import ProjectCombobox from '@/components/form/ProjectCombobox';
 import './RegisterDevice.css';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -17,6 +18,7 @@ export default function EditDevice() {
     category: '',
     assetCode: '',
     project: '',
+    projectCode: '',
     manageDept: '',
     username: '',
     realUser: '',
@@ -62,20 +64,6 @@ export default function EditDevice() {
 
   const [categories, setCategories] = useState([]);
   const [departments, setDepartments] = useState([]);
-
-  // 프로젝트 콤보박스 관련 상태
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [projectSearchTerm, setProjectSearchTerm] = useState('');
-  const [selectedProjectLabel, setSelectedProjectLabel] = useState('');
-  const projectComboRef = useRef(null);
-
-  // 프로젝트 필터링
-  const filteredProjects = projects.filter(
-    (p) =>
-      (p.name && p.name.toLowerCase().includes(projectSearchTerm.toLowerCase())) ||
-      (p.code && p.code.toLowerCase().includes(projectSearchTerm.toLowerCase()))
-  );
-
   // 프로젝트 리스트 불러오기
   useEffect(() => {
     fetchProjects().then((data) => {
@@ -153,30 +141,10 @@ export default function EditDevice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId]);
 
-  // 콤보박스 외부 클릭 시 닫기
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (projectComboRef.current && !projectComboRef.current.contains(event.target)) {
-        setIsProjectDropdownOpen(false);
-      }
-    }
-    if (isProjectDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isProjectDropdownOpen]);
-
   // 기타 입력 핸들러
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    if (name === 'project') {
-      setSelectedProjectLabel(value);
-    }
   };
 
   // 라디오 버튼 핸들러
@@ -199,11 +167,6 @@ export default function EditDevice() {
   };
 
   const equalsIgnoreCase = (left, right) => normalizeComparable(left) === normalizeComparable(right);
-
-  const formatProjectLabel = (name, code) => {
-    const label = `${name || ''}${code ? ` (${code})` : ''}`;
-    return label.trim();
-  };
 
   useEffect(() => {
     if (!isLoaded) {
@@ -370,6 +333,15 @@ export default function EditDevice() {
       return '반납 승인대기';
     }
 
+    if (type === '폐기') {
+      if (stage === '승인완료') {
+        return '폐기 완료';
+      }
+      if (isPendingStage(stage) || stage === '진행중') {
+        return '폐기 진행중';
+      }
+    }
+
     if (isUsable === false) {
       const holder = realUser || username || '정보 없음';
       return `대여 중 (사용자: ${holder})`;
@@ -388,6 +360,14 @@ export default function EditDevice() {
     if (type === '반납' && isPendingStage(stage)) {
       return '#0ea5e9';
     }
+    if (type === '폐기') {
+      if (stage === '승인완료') {
+        return '#475569';
+      }
+      if (isPendingStage(stage) || stage === '진행중') {
+        return '#9333ea';
+      }
+    }
     return isUsable === false ? '#dc2626' : '#2563eb';
   };
 
@@ -395,6 +375,7 @@ export default function EditDevice() {
     category: dto.categoryName || '',
     assetCode: dto.id || '',
     project: dto.projectName || '',
+    projectCode: dto.projectCode || '',
     manageDept: dto.manageDepName || '',
     username: dto.username || '',
     realUser: dto.realUser || '',
@@ -450,7 +431,6 @@ export default function EditDevice() {
       info: dto.approvalInfo || '',
       deadline: dto.deadline || null,
     });
-    setSelectedProjectLabel(formatProjectLabel(dto.projectName, dto.projectCode));
     setSearchId(dto.id || mapped.assetCode || '');
     setIsLoaded(true);
   };
@@ -535,21 +515,44 @@ export default function EditDevice() {
     }
   };
 
-  const toggleProjectDropdown = () => {
-    setIsProjectDropdownOpen((prev) => !prev);
-    if (!isProjectDropdownOpen) {
-      setProjectSearchTerm('');
+  const selectedProject = useMemo(() => {
+    const name = typeof form.project === 'string' ? form.project.trim() : '';
+    const code = typeof form.projectCode === 'string' ? form.projectCode.trim() : '';
+    if (!name && !code) {
+      return null;
     }
-  };
-  const handleProjectSelect = (project) => {
+    const match = projects.find((project) => {
+      const projectName = project?.name?.trim() ?? '';
+      const projectCode = project?.code?.trim() ?? '';
+      if (name && code) {
+        return projectName === name && projectCode === code;
+      }
+      if (name) {
+        return projectName === name;
+      }
+      return projectCode === code;
+    });
+    if (match) {
+      return {
+        id: match.id ?? null,
+        name: match.name ?? '',
+        code: match.code ?? '',
+      };
+    }
+    return {
+      id: null,
+      name,
+      code,
+    };
+  }, [form.project, form.projectCode, projects]);
+
+  const handleProjectSelect = useCallback((project) => {
     setForm((prev) => ({
       ...prev,
-      project: project?.name || '',
+      project: project?.name ?? '',
+      projectCode: project?.code ?? '',
     }));
-    setSelectedProjectLabel(formatProjectLabel(project?.name, project?.code));
-    setIsProjectDropdownOpen(false);
-    setProjectSearchTerm('');
-  };
+  }, []);
 
   const handlePriceChange = (event) => {
     const numeric = event.target.value.replace(/[^0-9]/g, '');
@@ -693,7 +696,6 @@ export default function EditDevice() {
           <label>
             품목
             <select name="category" value={form.category} onChange={handleChange} required>
-              <option value="">선택</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -709,58 +711,21 @@ export default function EditDevice() {
           {/* 프로젝트 (커스텀 콤보박스) */}
           <label className="device-info-label">
             프로젝트
-            <div className="combobox-wrapper" ref={projectComboRef}>
-              <div className={`combobox${isProjectDropdownOpen ? " open" : ""}`} style={{width: '100%'}}>
-                <button
-                  type="button"
-                  className="combobox-trigger"
-                  onClick={toggleProjectDropdown}
-                  style={{width: '100%'}}
-                >
-                  <span>{selectedProjectLabel || "프로젝트를 선택하세요"}</span>
-                  <span className="combobox-caret" aria-hidden="true">
-                    ▾
-                  </span>
-                </button>
-                {isProjectDropdownOpen && (
-                  <div className="combobox-panel" style={{width: '100%', minWidth: 0}}>
-                    <input
-                      type="text"
-                      className="combobox-search"
-                      placeholder="프로젝트 이름 또는 코드를 검색하세요"
-                      value={projectSearchTerm}
-                      onChange={(event) => setProjectSearchTerm(event.target.value)}
-                      autoFocus
-                      style={{width: '94%'}}
-                    />
-                    <div className="combobox-list">
-                      {filteredProjects.length === 0 && (
-                        <p className="combobox-empty">검색 결과가 없습니다.</p>
-                      )}
-                      {filteredProjects.map((project) => (
-                        <button
-                          type="button"
-                          key={project.id}
-                          className="combobox-option"
-                          onClick={() => handleProjectSelect(project)}
-                        >
-                          <span className="combobox-option-name">{project.name}</span>
-                          {project.code && (
-                            <span className="combobox-option-code">{project.code}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div style={{ width: '100%' }}>
+              <ProjectCombobox
+                projects={projects}
+                selectedProject={selectedProject}
+                onSelect={handleProjectSelect}
+                disabled={projects.length === 0}
+                searchPlaceholder="프로젝트 이름 또는 코드를 검색하세요"
+                listClassName="combobox-list"
+              />
             </div>
           </label>
           {/* 관리부서 */}
           <label>
             관리부서
             <select name="manageDept" value={form.manageDept} onChange={handleChange}>
-              <option value="">선택</option>
               {departments.map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
@@ -840,7 +805,6 @@ export default function EditDevice() {
           <label>
             용도
             <select name="purpose" value={form.purpose} onChange={handleChange}>
-              <option value="">선택</option>
               <option value="개발">개발</option>
               <option value="사무">사무</option>
             </select>

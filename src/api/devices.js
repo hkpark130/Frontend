@@ -53,6 +53,22 @@ export const fetchDeviceDetail = async (deviceId) => {
   return data;
 };
 
+export const fetchDevicesByIds = async (ids = []) => {
+  const params = new URLSearchParams();
+  ids
+    .map((id) => (id != null && typeof id.toString === "function" ? id.toString() : String(id ?? "")))
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .forEach((value) => params.append("ids", value));
+
+  if ([...params.keys()].length === 0) {
+    return [];
+  }
+
+  const { data } = await api.get("/api/devices/lookup", { params });
+  return data;
+};
+
 export const updateDevice = async (deviceId, payload) => {
   const { data } = await api.put(`/api/device/${deviceId}`, payload);
   return data;

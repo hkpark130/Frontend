@@ -22,6 +22,20 @@
   box-sizing: border-box;
 }
 
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-with-action > *:first-child {
+  flex: 1 1 auto;
+}
+
+.input-with-action .small-button {
+  white-space: nowrap;
+}
+
 .device-info-label input,
 .device-info-label select {
   margin-top: 4px;
@@ -42,7 +56,7 @@
 }
 
 .applicant-column--compact {
-  margin-bottom: 6px;
+  margin-bottom: 1px;
 }
 
 .applicant-column--stacked {
@@ -64,6 +78,14 @@
   grid-template-columns: minmax(60px, 15%) 1fr;
   gap: 12px 24px;
   align-items: flex-start;
+}
+
+.status-grid--return {
+  grid-template-columns: 1fr;
+}
+
+.status-grid--return .stretch {
+  grid-column: 1 / -1;
 }
 
 .status-radio-group {
@@ -88,6 +110,16 @@
 .status-radio-input {
   width: 20px;
   height: 20px;
+}
+
+.status-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 0.95rem;
+  color: #111827;
 }
 
 .approver-grid {
@@ -164,7 +196,7 @@
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   border-radius: 9999px;
   border: 1px solid transparent;
   background: #e5e7eb;
@@ -275,6 +307,7 @@
 .combobox-panel--stretch {
   width: 100%;
   min-width: 0;
+  max-width: none;
 }
 
 .combobox-search--full {
@@ -303,12 +336,233 @@
   margin-right: 8px;
 }
 
+.device-overrides-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.device-overrides-table.device-action-table {
+  table-layout: fixed;
+}
+
+.table-wrapper--device-overrides {
+  overflow: visible;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.table-wrapper--device-overrides .table-wrapper__scroll {
+  position: relative;
+  overflow-x: auto;
+  border-radius: inherit;
+}
+
+.table-wrapper--device-overrides .table-wrapper__scroll table {
+  min-width: 960px;
+}
+
+.table-wrapper--device-overrides .combobox-panel {
+  z-index: 120;
+}
+
+.device-overrides-table th,
+.device-overrides-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+  background: #fff;
+}
+
+.device-overrides-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #111827;
+}
+
+.device-overrides-table.device-action-table th:nth-child(1),
+.device-overrides-table.device-action-table td:nth-child(1) {
+  width: 8%;
+}
+
+.device-overrides-table.device-action-table th:nth-child(2),
+.device-overrides-table.device-action-table td:nth-child(2) {
+  width: 22%;
+}
+
+.device-overrides-table.device-action-table th:nth-child(3),
+.device-overrides-table.device-action-table td:nth-child(3) {
+  width: 8%;
+}
+
+.device-overrides-table.device-action-table th:nth-child(4),
+.device-overrides-table.device-action-table td:nth-child(4) {
+  width: 56%;
+}
+
+.device-overrides-table.device-action-table th:nth-child(5),
+.device-overrides-table.device-action-table td:nth-child(5) {
+  width: 7%;
+}
+
+/* When editing a 반납 (return) we show fewer columns: 관리번호 / 반납 상태 / 장비 태그 / 현재 정보
+   Use a modifier class on the table `.return-editing` to override widths for that layout. */
+.device-overrides-table.return-editing th:nth-child(1),
+.device-overrides-table.return-editing td:nth-child(1) {
+  /* 관리번호 */
+  width: 100px;
+}
+.device-overrides-table.return-editing th:nth-child(2),
+.device-overrides-table.return-editing td:nth-child(2) {
+  /* 반납 상태 */
+  width: 120px;
+}
+.device-overrides-table.return-editing th:nth-child(3),
+.device-overrides-table.return-editing td:nth-child(3) {
+  /* 장비 태그 (가변 넓게) */
+  width: 420px;
+}
+.device-overrides-table.return-editing th:nth-child(4),
+.device-overrides-table.return-editing td:nth-child(4) {
+  /* 현재 정보 */
+  width: 220px;
+}
+
+.device-overrides-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.device-overrides-project {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.device-overrides-project .combobox-wrapper {
+  width: 100%;
+}
+
+.device-overrides-project .combobox-trigger {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.device-overrides-project .combobox-trigger span:first-child {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.device-overrides-user {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.device-overrides-user select,
+.device-overrides-user input,
+.device-overrides-table select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.device-overrides-user input,
+.device-overrides-table select {
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.device-overrides-user input:focus,
+.device-overrides-table select:focus,
+.device-overrides-user select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  background: #fff;
+}
+
+.device-overrides-user input:disabled {
+  background: #f3f4f6;
+  color: #94a3b8;
+}
+
+.device-overrides-current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.device-overrides-current-label {
+  display: block;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.device-overrides-current-value {
+  display: block;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.device-tag-view {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.device-tag-view > span:first-child {
+  font-weight: 600;
+  color: #111827;
+}
+
+.device-overrides-current-sub {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.device-overrides-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.device-overrides-actions .small-button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 @media (max-width: 900px) {
   .device-info-grid,
   .approver-grid {
     flex-direction: column;
     gap: 18px;
   }
+
+/* Validation error hint for per-row fields */
+.field-error {
+  color: #b91c1c; /* red-700 */
+  font-size: 12px;
+  margin-top: 6px;
+}
 
   .device-info-label,
   .approver-field {
@@ -333,5 +587,78 @@
   .tag-add-button {
     width: 100%;
     justify-content: center;
+  }
+
+  .device-overrides-table {
+    font-size: 12.5px;
+  }
+
+  .device-overrides-user {
+    flex-direction: column;
+  }
+
+  .device-overrides-table th,
+  .device-overrides-table td {
+    padding: 8px 10px;
+  }
+}
+
+/* Applicant form layout: 신청사유(넓게) + 사이드 필드(usage/deadline) 고정 너비 */
+.form-section-grid.applicant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 사유 textarea (왼쪽 칸) */
+.applicant-grid__reason textarea {
+  width: 100%;
+  box-sizing: border-box; /* 패딩/보더 포함해서 계산 */
+  min-height: 160px;      /* 원하는 초기 높이 */
+  max-height: 420px;      /* 너무 길어지면 스크롤 */
+  resize: vertical;       /* 세로로 늘리는 것만 허용 */
+  overflow: auto;
+  padding: 10px;
+  font-size: 14px;
+}
+
+/* 기간 / 마감일 필드(오른쪽) 구성 항목 간격 안정화 */
+.applicant-field {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* 사용기간 (콤포넌트) */
+.applicant-field.applicant-field--range {
+  min-width: 0;           /* 그리드에서 overflow 방지(특히 flex에서 중요) */
+  width: 100%;
+}
+
+/* 신청 마감일 칸 너비 고정 (오른쪽 패널 안에서) */
+.applicant-field.applicant-field--deadline {
+  width: 90%;
+  min-width: 100px;
+  max-width: 340px;
+  margin-top: -5px;
+}
+
+/* 태그 편집(반납) 블록이 가로로 나가면 줄바꿈 방지/스페이싱 조절 */
+.tag-edit-wrapper {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+}
+
+/* 작은 화면 대응: 한 열로 쌓기 */
+@media (max-width: 900px) {
+  .form-section-grid.applicant-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .applicant-grid__reason textarea {
+    min-height: 120px;
   }
 }

@@ -3,6 +3,8 @@ import { OIDC_STORAGE_KEY } from "@/auth/oidcConfig";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+export const API_AUTH_ERROR_EVENT = "api-auth-error";
+
 const readStoredAccessToken = () => {
   if (typeof window === "undefined") {
     return null;
@@ -46,6 +48,15 @@ const readStoredAccessToken = () => {
 
 let accessToken = readStoredAccessToken();
 
+const emitAuthError = (status, sourceUrl) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const detail = { status, sourceUrl };
+  const event = new CustomEvent(API_AUTH_ERROR_EVENT, { detail });
+  window.dispatchEvent(event);
+};
+
 // Create axios instance without credentials by default.
 // We'll enable credentials and Authorization header only when we have an access token.
 const axiosInstance = axios.create({
@@ -70,6 +81,21 @@ axiosInstance.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      if (status === 401) {
+        accessToken = null;
+      }
+      const sourceUrl = error?.config?.url;
+      emitAuthError(status, sourceUrl);
+    }
+    return Promise.reject(error);
+  },
 );
 
 export const setApiAccessToken = (token) => {

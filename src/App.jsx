@@ -25,12 +25,17 @@ import AdminDisposalList from './pages/AdminDisposalList'
 import MyAssets from './pages/MyAssets'
 import MyApprovalRequests from './pages/MyApprovalRequests'
 import Forbidden from './pages/Forbidden'
+import Unauthorized from './pages/Unauthorized'
 import AdminRoute from '@/components/routing/AdminRoute'
+import AuthErrorListener from '@/components/routing/AuthErrorListener'
+import PostLoginRedirect from '@/components/routing/PostLoginRedirect'
 import OpenStackInstanceSearch from './pages/OpenStackInstanceSearch'
 
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthErrorListener />
+      <PostLoginRedirect />
       <div className="layout">
         <Sidebar />
         <main className="main">
@@ -40,7 +45,10 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               {/* 가용장비 리스트 */}
               <Route path="/device/list" element={<DeviceList />} />
+              <Route path="/device/apply" element={<DeviceApplication />} />
               <Route path="/device/:deviceId/apply" element={<DeviceApplication />} />
+              <Route path="/mypage/my-assets/return" element={<DeviceReturnRequest />} />
+              <Route path="/mypage/my-assets/disposal" element={<DeviceDisposalRequest />} />
               <Route path="/mypage/my-assets/:deviceId/return" element={<DeviceReturnRequest />} />
               <Route path="/mypage/my-assets/:deviceId/disposal" element={<DeviceDisposalRequest />} />
               {/* 관리자 메뉴 */}
@@ -67,6 +75,7 @@ export default function App() {
               <Route path="/mypage/requests/:approvalId" element={<ApprovalDetail />} />
               {/* OpenStack */}
               <Route path="/openstack/instance-search" element={<OpenStackInstanceSearch />} />
+              <Route path="/401" element={<Unauthorized />} />
               <Route path="/403" element={<Forbidden />} />
             </Routes>
           </div>

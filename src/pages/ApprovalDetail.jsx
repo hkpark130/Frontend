@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   addApprovalComment,
@@ -11,13 +11,14 @@ import {
   updateApprovalApplication,
 } from "@/api/approvals";
 import { useUser } from "@/context/UserProvider";
-import { fetchDepartments, fetchProjects } from "@/api/devices";
+import { fetchDepartments, fetchProjects, fetchDeviceDetail } from "@/api/devices";
 import { fetchTags } from "@/api/tags";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import "dayjs/locale/ko";
 import Spinner from "@/components/Spinner";
+import ProjectCombobox from "@/components/form/ProjectCombobox";
 import "./DeviceFormStyles.css";
 
 const formatDateTime = (value) => {
@@ -41,10 +42,17 @@ const statusClassMap = {
 
 const getStatusClass = (status) => {
   if (!status) return "status-unknown";
-  if (typeof status === "string" && status.trim().endsWith("승인완료")) {
-    return "status-progress";
+  if (typeof status === "string") {
+    const trimmed = status.trim();
+    if (!trimmed) {
+      return "status-unknown";
+    }
+    if (/^\d+차승인완료$/.test(trimmed)) {
+      return "status-progress";
+    }
+    return statusClassMap[trimmed] ?? "status-unknown";
   }
-  return statusClassMap[status] ?? "status-unknown";
+  return "status-unknown";
 };
 
 const computeStageLabel = (approvalInfo, approvers = []) => {
@@ -52,40 +60,44 @@ const computeStageLabel = (approvalInfo, approvers = []) => {
   if (approvalInfo !== "승인대기" && !(typeof approvalInfo === "string" && approvalInfo.includes("승인완료"))) {
     return null;
   }
-  const approved = approvers.filter((item) => item?.isApproved);
-  if (approved.length === 0) return null;
-  const minStep = Math.min(...approved.map((item) => Number(item.step) || 0).filter((step) => step > 0));
-  if (!Number.isFinite(minStep) || minStep <= 0) return null;
-  return `${minStep}차승인완료`;
+  const approvedSteps = approvers
+    .filter((item) => item?.isApproved)
+    .map((item) => Number(item.step) || 0)
+    .filter((step) => step > 0);
+  if (approvedSteps.length === 0) return null;
+  const highest = Math.max(...approvedSteps);
+  if (!Number.isFinite(highest) || highest <= 0) return null;
+  return `${highest}차승인완료`;
 };
 
 const computeUrgency = (deadline, approvalInfo) => {
   if (!deadline) return { urgent: false, label: null };
   const active = approvalInfo === "승인대기"
-    || (typeof approvalInfo === "string" && approvalInfo.trim().endsWith("승인완료"));
+    || (typeof approvalInfo === "string" && /^\d+차승인완료$/.test(approvalInfo.trim()));
   if (!active) return { urgent: false, label: null };
   const now = new Date();
   const due = new Date(deadline);
   if (Number.isNaN(due.getTime())) return { urgent: false, label: null };
   const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays > 5) return { urgent: false, label: null };
-  if (diffDays > 0) return { urgent: true, label: `긴급 D-${diffDays}` };
-  if (diffDays === 0) return { urgent: true, label: "긴급 오늘 마감" };
+  if (diffDays > 5) {
+    return { urgent: false, label: null };
+  }
+  if (diffDays > 0) {
+    return { urgent: true, label: `긴급 D-${diffDays}` };
+  }
+  if (diffDays === 0) {
+    return { urgent: true, label: "긴급 오늘 마감" };
+  }
   return { urgent: true, label: `긴급 ${Math.abs(diffDays)}일 지연` };
 };
 
 const statusLabel = (status) => {
   if (!status) return "-";
-  if (status === "승인완료") {
-    return "승인완료";
+  if (typeof status !== "string") {
+    return String(status);
   }
-  if (status === "승인대기") {
-    return "승인 대기";
-  }
-  if (typeof status === "string" && status.trim().endsWith("승인완료")) {
-    return status.trim();
-  }
-  return status;
+  const trimmed = status.trim();
+  return trimmed || "-";
 };
 
 const extractDateString = (value) => {
@@ -158,7 +170,16 @@ const hasTag = (collection = [], candidate) => {
 const removeTag = (collection = [], candidate) =>
   (collection ?? []).filter((item) => tagKey(item) !== tagKey(candidate));
 
-const mergeTagOptions = (base = [], additions = []) => dedupeTagNames([...(base ?? []), ...(additions ?? [])]);
+const mergeTagOptions = (base = [], additions = []) =>
+  dedupeTagNames([...(base ?? []), ...(additions ?? [])]);
+
+const normalizeName = (value) => (typeof value === "string" ? value.trim() : "");
+
+const DEFAULT_RETURN_STATUS_OPTIONS = ["정상", "노후"];
+const DEFAULT_RETURN_TAG_SUGGESTIONS = ["정상", "점검필요", "부속품확인", "데이터삭제", "파손"];
+const DEFAULT_METADATA_PROJECT = "본사";
+const DEFAULT_METADATA_DEPARTMENT = "경영지원부";
+const DEFAULT_METADATA_REAL_USER = "-";
 
 export default function ApprovalDetail() {
   const { approvalId } = useParams();
@@ -171,10 +192,8 @@ export default function ApprovalDetail() {
   const [comments, setComments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const [actionUsername, setActionUsername] = useState(defaultUsername);
+  const actionUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
   const [actionComment, setActionComment] = useState("");
-  // note: comment author is derived from the logged-in user (normalizedUsername)
   const [commentText, setCommentText] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState("");
@@ -186,193 +205,320 @@ export default function ApprovalDetail() {
   const [projects, setProjects] = useState([]);
   const [metadataError, setMetadataError] = useState(null);
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [projectSearchTerm, setProjectSearchTerm] = useState("");
-  const projectComboRef = useRef(null);
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagInput, setTagInput] = useState("");
   const [isTagLoading, setIsTagLoading] = useState(false);
   const [tagFetchError, setTagFetchError] = useState(null);
+  const [associatedDevices, setAssociatedDevices] = useState([]);
+  const [isAssociatedDevicesLoading, setIsAssociatedDevicesLoading] = useState(false);
+  const [associatedDevicesError, setAssociatedDevicesError] = useState(null);
   const [isActionProcessing, setIsActionProcessing] = useState(false);
+  const [deviceOverrides, setDeviceOverrides] = useState({});
 
   const normalizedUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
-  const normalizedDisplayName = useMemo(() => (user?.profile?.name ?? "").trim(), [user]);
   const currentUserExternalId = useMemo(() => {
     const candidate = user?.profile?.sub || user?.profile?.id;
     return typeof candidate === "string" ? candidate.trim() : "";
   }, [user]);
 
   // comment author is not an editable field anymore; we use `normalizedUsername`
-
-  const isCurrentUserApprover = useMemo(() => {
-    if (!normalizedUsername) {
-      return false;
-    }
-    const approvers = approval?.approvers;
-    if (!Array.isArray(approvers) || approvers.length === 0) {
-      return false;
-    }
-    return approvers.some((item) => {
-      const candidate = (item?.username ?? "").trim();
-      const step = Number(item?.step ?? 0);
-      return candidate === normalizedUsername && (step === 1 || step === 2);
-    });
-  }, [approval, normalizedUsername]);
-
-  useEffect(() => {
-    if (isCurrentUserApprover) {
-      setActionUsername(normalizedUsername);
-    } else {
-      setActionUsername("");
-    }
-  }, [isCurrentUserApprover, normalizedUsername]);
-
-  const approverPending = useMemo(() => {
-    if (!approval?.approvers) {
+  const approvalDeviceIds = useMemo(() => {
+    if (!approval) {
       return [];
     }
-    return approval.approvers.filter((item) => !item.isApproved);
+    const collected = [];
+    const seen = new Set();
+    const rawIds = Array.isArray(approval.deviceIds) ? approval.deviceIds : [];
+    rawIds
+      .map((value) => (value != null ? String(value).trim() : ""))
+      .filter((value) => value.length > 0)
+      .forEach((value) => {
+        if (!seen.has(value)) {
+          seen.add(value);
+          collected.push(value);
+        }
+      });
+    const fallbackId = approval.deviceId != null ? String(approval.deviceId).trim() : "";
+    if (fallbackId && !seen.has(fallbackId)) {
+      collected.unshift(fallbackId);
+    }
+    return collected;
   }, [approval]);
 
-  const isRequester = useMemo(() => {
-    if (!approval) {
-      return false;
-    }
-    const requesterId = typeof approval.userUuid === "string" ? approval.userUuid.trim() : "";
-    if (requesterId && currentUserExternalId && requesterId === currentUserExternalId) {
-      return true;
-    }
-    const requesterName = typeof approval.userName === "string" ? approval.userName.trim().toLowerCase() : "";
-    if (!requesterName) {
-      return false;
-    }
-    if (normalizedDisplayName && requesterName === normalizedDisplayName.toLowerCase()) {
-      return true;
-    }
-    if (normalizedUsername && requesterName === normalizedUsername.toLowerCase()) {
-      return true;
-    }
-    return false;
-  }, [approval, currentUserExternalId, normalizedDisplayName, normalizedUsername]);
-
-  const canEditApplication = useMemo(() => {
-    if (!approval || !isRequester) {
-      return false;
-    }
-    const status = approval.approvalStatus ?? "";
-    return status === "PENDING" || status === "IN_PROGRESS";
-  }, [approval, isRequester]);
-
-  const statusClass = useMemo(() => getStatusClass(approval?.approvalInfo), [approval]);
-  const stageLabel = useMemo(
-    () => (approval ? computeStageLabel(approval.approvalInfo, approval.approvers) : null),
-    [approval],
-  );
-  const urgency = useMemo(
-    () => (approval ? computeUrgency(approval.deadline, approval.approvalInfo) : { urgent: false }),
-    [approval],
-  );
-  const nextPending = useMemo(
-    () => (approval?.approvers || []).find((item) => !item.isApproved && !item.isRejected),
-    [approval],
-  );
-  const isTerminalStatus = useMemo(
-    () => ["승인완료", "반려", "취소"].includes(approval?.approvalInfo ?? ""),
+  const deviceItems = useMemo(
+    () => (Array.isArray(approval?.deviceItems) ? approval.deviceItems : []),
     [approval],
   );
 
-  const canRollbackApproval = useMemo(() => {
-    if (!approval || !actionUsername || isTerminalStatus) {
-      return false;
-    }
-    const approvers = Array.isArray(approval.approvers) ? approval.approvers : [];
-    const currentStep = approvers.find((item) => item?.username === actionUsername);
-    if (!currentStep || !currentStep.isApproved) {
-      return false;
-    }
-    const myStepNumber = Number(currentStep.step) || 0;
-    const laterApproved = approvers.some((item) => {
-      if (!item) {
-        return false;
+  const isReturnRequest = approval?.type === "반납";
+  const isDisposalRequest = approval?.type === "폐기";
+  const isReturnEditing = isReturnRequest && isEditing;
+
+  const initialTags = useMemo(
+    () => dedupeTagNames(Array.isArray(approval?.tags) ? approval.tags : []),
+    [approval],
+  );
+
+  const associatedDeviceMap = useMemo(() => {
+    const map = new Map();
+    (associatedDevices ?? []).forEach((device) => {
+      const id = device?.id ?? device?.deviceId;
+      if (!id) {
+        return;
       }
-      const stepNumber = Number(item.step) || 0;
-      if (stepNumber <= myStepNumber) {
-        return false;
-      }
-      return Boolean(item.isApproved);
+      map.set(String(id).trim(), device);
     });
-    return !laterApproved;
-  }, [approval, actionUsername, isTerminalStatus]);
+    return map;
+  }, [associatedDevices]);
 
-  const canApprove = useMemo(() => {
-    if (isTerminalStatus || !isCurrentUserApprover) {
+  const deviceRows = useMemo(() => {
+    const rows = [];
+    if (deviceItems.length > 0) {
+      deviceItems.forEach((item, index) => {
+        const rawId = item?.deviceId ?? approvalDeviceIds[index];
+        const id = rawId != null ? String(rawId).trim() : "";
+        const fallback = id ? associatedDeviceMap.get(id) : null;
+        rows.push({
+          key: id || `item-${index}`,
+          deviceId: id || null,
+          categoryName: item?.categoryName ?? fallback?.categoryName ?? fallback?.category ?? null,
+          purpose: item?.purpose ?? fallback?.purpose ?? null,
+          status: item?.status ?? fallback?.status ?? null,
+          requestedProjectName: item?.requestedProjectName ?? approval?.tmpProjectName ?? null,
+          requestedProjectCode: item?.requestedProjectCode ?? approval?.tmpProjectCode ?? null,
+          requestedDepartmentName: item?.requestedDepartmentName ?? approval?.tmpDepartmentName ?? "경영지원부",
+          requestedRealUser: item?.requestedRealUser ?? approval?.realUser ?? null,
+          currentProjectName: item?.currentProjectName ?? fallback?.projectName ?? null,
+          currentProjectCode: item?.currentProjectCode ?? fallback?.projectCode ?? null,
+          currentDepartmentName: item?.currentDepartmentName ?? fallback?.manageDepName ?? null,
+          currentRealUser: item?.currentRealUser ?? fallback?.realUser ?? null,
+          categoryFallback: fallback?.categoryName ?? fallback?.category ?? null,
+        });
+      });
+    } else {
+      approvalDeviceIds.forEach((rawId) => {
+        const id = rawId != null ? String(rawId).trim() : "";
+        if (!id) {
+          return;
+        }
+        const fallback = associatedDeviceMap.get(id);
+        rows.push({
+          key: id,
+          deviceId: id,
+          categoryName: fallback?.categoryName ?? fallback?.category ?? null,
+          purpose: fallback?.purpose ?? null,
+          status: fallback?.status ?? null,
+          requestedProjectName: approval?.tmpProjectName ?? null,
+          requestedProjectCode: approval?.tmpProjectCode ?? null,
+          requestedDepartmentName: approval?.tmpDepartmentName ?? "경영지원부",
+          requestedRealUser: approval?.realUser ?? null,
+          currentProjectName: fallback?.projectName ?? null,
+          currentProjectCode: fallback?.projectCode ?? null,
+          currentDepartmentName: fallback?.manageDepName ?? null,
+          currentRealUser: fallback?.realUser ?? null,
+        });
+      });
+    }
+    return rows;
+  }, [approval, approvalDeviceIds, associatedDeviceMap, deviceItems]);
+
+  const deviceRowMap = useMemo(() => {
+    const map = new Map();
+    deviceRows.forEach((row) => {
+      const id = row?.deviceId ?? row?.key;
+      if (!id) {
+        return;
+      }
+      map.set(String(id), row);
+    });
+    return map;
+  }, [deviceRows]);
+
+  const visibleOverrideIds = useMemo(() => {
+    const ordered = [];
+    const seen = new Set();
+    approvalDeviceIds.forEach((rawId) => {
+      const id = rawId != null ? String(rawId).trim() : "";
+      if (!id || seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      ordered.push(id);
+    });
+    Object.keys(deviceOverrides ?? {}).forEach((rawId) => {
+      const id = rawId != null ? String(rawId).trim() : "";
+      if (!id || seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      ordered.push(id);
+    });
+    return ordered;
+  }, [approvalDeviceIds, deviceOverrides]);
+
+  const returnStatusOptions = useMemo(() => {
+    const seen = new Set(DEFAULT_RETURN_STATUS_OPTIONS);
+    visibleOverrideIds.forEach((id) => {
+      const status = deviceOverrides[id]?.status;
+      const normalized = typeof status === "string" ? status.trim() : "";
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+      }
+    });
+    return Array.from(seen);
+  }, [deviceOverrides, visibleOverrideIds]);
+
+  const approverPending = useMemo(() => {
+    const list = Array.isArray(approval?.approvers) ? approval.approvers : [];
+    return list.filter((approver) => !approver?.isApproved && !approver?.isRejected);
+  }, [approval]);
+
+  const nextPending = approverPending.length > 0 ? approverPending[0] : null;
+
+  const stageLabel = useMemo(
+    () => computeStageLabel(approval?.approvalInfo, approval?.approvers ?? []),
+    [approval],
+  );
+
+  const statusClass = useMemo(
+    () => getStatusClass(approval?.approvalInfo ?? approval?.approvalStatus ?? ""),
+    [approval],
+  );
+
+  const urgency = useMemo(
+    () => computeUrgency(approval?.deadline, approval?.approvalInfo),
+    [approval],
+  );
+
+  const isTerminalStatus = useMemo(() => {
+    const status = approval?.approvalStatus;
+    if (!status || typeof status !== "string") {
       return false;
     }
-    return approverPending.some((item) => item.username === actionUsername);
-  }, [approverPending, actionUsername, isCurrentUserApprover, isTerminalStatus]);
+    const normalized = status.trim().toUpperCase();
+    return normalized === "APPROVED" || normalized === "REJECTED" || normalized === "CANCELLED";
+  }, [approval]);
 
-  const canReject = useMemo(() => {
-    if (isTerminalStatus || !isCurrentUserApprover) {
+  const matchApprover = useCallback(
+    (approver) => {
+      if (!approver) {
+        return false;
+      }
+      const normalizedName = normalizedUsername?.toLowerCase();
+      const normalizedId = currentUserExternalId?.toLowerCase();
+      const approverName = approver.username ? approver.username.trim().toLowerCase() : "";
+      const approverId = approver.userUuid ? String(approver.userUuid).toLowerCase() : "";
+      return (normalizedName && normalizedName === approverName)
+        || (normalizedId && normalizedId === approverId);
+    },
+    [currentUserExternalId, normalizedUsername],
+  );
+
+  const isCurrentUserApprover = useMemo(() => {
+    const list = Array.isArray(approval?.approvers) ? approval.approvers : [];
+    if (list.length === 0) {
       return false;
     }
-    if (approverPending.some((item) => item.username === actionUsername)) {
-      return true;
-    }
-    return canRollbackApproval;
-  }, [approverPending, actionUsername, canRollbackApproval, isCurrentUserApprover, isTerminalStatus]);
+    return list.some((approver) => matchApprover(approver));
+  }, [approval, matchApprover]);
+
+  const isCurrentUserPendingApprover = useMemo(
+    () => (nextPending ? matchApprover(nextPending) : false),
+    [matchApprover, nextPending],
+  );
+
+  const canApprove = isCurrentUserPendingApprover && !isTerminalStatus;
+  const canReject = canApprove;
+
+  useEffect(() => {
+    const baseOptions = isReturnRequest
+      ? mergeTagOptions(DEFAULT_RETURN_TAG_SUGGESTIONS, initialTags)
+      : initialTags;
+    setSelectedTags(initialTags);
+    setTagOptions((prev) => mergeTagOptions(prev, baseOptions));
+    setTagInput("");
+  }, [initialTags, isReturnRequest]);
 
   const loadDetail = useCallback(async () => {
+    if (!approvalId) {
+      setApproval(null);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      const data = await fetchApprovalDetail(approvalId);
-      setApproval(data);
+      const detail = await fetchApprovalDetail(Number(approvalId));
+      setApproval(detail);
     } catch (err) {
       console.error(err);
-      setError("결재 상세를 불러오는 중 문제가 발생했습니다.");
+      setError("결재 정보를 불러오지 못했습니다.");
     } finally {
       setIsLoading(false);
     }
   }, [approvalId]);
 
   const loadComments = useCallback(async () => {
+    if (!approvalId) {
+      setComments([]);
+      return;
+    }
     try {
-      const data = await fetchApprovalComments(approvalId);
-      const list = Array.isArray(data) ? data : [];
-      const normalizedList = list.map((item) => ({
-        ...item,
-        username: (item?.username ?? "").trim(),
-        authorName: (item?.authorName ?? "").trim(),
-      }));
-      setComments(normalizedList);
+      const data = await fetchApprovalComments(Number(approvalId));
+      setComments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
     }
   }, [approvalId]);
 
-  const canModifyComment = useCallback(
-    (comment) => {
-      if (!comment) return false;
-      if (!normalizedUsername) return false;
-      const commentUsers = [comment.username, comment.authorName]
-        .filter((value) => typeof value === "string" && value.trim().length > 0)
-        .map((value) => value.trim().toLowerCase());
-      return commentUsers.includes(normalizedUsername.toLowerCase());
-    },
-    [normalizedUsername],
-  );
-
   useEffect(() => {
-    if (!approvalId) return;
     loadDetail();
     loadComments();
-  }, [approvalId, loadDetail, loadComments]);
+  }, [loadComments, loadDetail]);
 
   useEffect(() => {
     let cancelled = false;
-    const loadTags = async () => {
+    const loadMetadata = async () => {
+      setIsMetadataLoading(true);
+      setMetadataError(null);
+      try {
+        const [deptData, projectData] = await Promise.all([fetchDepartments(), fetchProjects()]);
+        if (cancelled) {
+          return;
+        }
+        setDepartments(Array.isArray(deptData) ? deptData : []);
+        setProjects(Array.isArray(projectData) ? projectData : []);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setMetadataError("참조 정보를 불러오지 못했습니다.");
+          setDepartments([]);
+          setProjects([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMetadataLoading(false);
+        }
+      }
+    };
+
+    loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isReturnRequest) {
+      setIsTagLoading(false);
       setTagFetchError(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadAvailableTags = async () => {
       setIsTagLoading(true);
+      setTagFetchError(null);
       try {
         const data = await fetchTags();
         if (cancelled) {
@@ -393,97 +539,209 @@ export default function ApprovalDetail() {
       }
     };
 
-    loadTags();
+    loadAvailableTags();
     return () => {
       cancelled = true;
     };
-  }, []);
-  useEffect(() => {
-    let cancelled = false;
-    const loadMetadata = async () => {
-      setIsMetadataLoading(true);
-      setMetadataError(null);
-      try {
-        const [departmentData, projectData] = await Promise.all([
-          fetchDepartments(),
-          fetchProjects(),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setDepartments(Array.isArray(departmentData) ? departmentData : []);
-        setProjects(Array.isArray(projectData) ? projectData : []);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setMetadataError("결재 수정에 필요한 참조 데이터를 불러오지 못했습니다.");
-        }
-      } finally {
-        if (!cancelled) {
-          setIsMetadataLoading(false);
-        }
+  }, [isReturnRequest]);
+
+  const canEditApplication = useMemo(() => {
+    if (!approval || isTerminalStatus) {
+      return false;
+    }
+    const applicant = approval.userName ? approval.userName.trim().toLowerCase() : "";
+    const current = normalizedUsername ? normalizedUsername.toLowerCase() : "";
+    if (applicant && current) {
+      return applicant === current;
+    }
+    return !!normalizedUsername;
+  }, [approval, isTerminalStatus, normalizedUsername]);
+
+  const canModifyComment = useCallback(
+    (comment) => {
+      if (!comment) {
+        return false;
       }
-    };
-
-    loadMetadata();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-    const initialTags = useMemo(() => dedupeTagNames(approval?.tags ?? []), [approval]);
+      const author = comment.username ? comment.username.trim().toLowerCase() : "";
+      const current = normalizedUsername ? normalizedUsername.toLowerCase() : "";
+      return author && current && author === current;
+    },
+    [normalizedUsername],
+  );
 
     useEffect(() => {
-      setSelectedTags(initialTags);
-      setTagOptions((prev) => mergeTagOptions(prev, initialTags));
-      setTagInput("");
-    }, [initialTags]);
+      let cancelled = false;
+      const ids = approvalDeviceIds;
+      if (!ids || ids.length === 0) {
+        setAssociatedDevices([]);
+        setAssociatedDevicesError(null);
+        setIsAssociatedDevicesLoading(false);
+        return () => {
+          cancelled = true;
+        };
+      }
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!projectComboRef.current) {
+      const loadAssociatedDevices = async () => {
+        setIsAssociatedDevicesLoading(true);
+        setAssociatedDevicesError(null);
+        try {
+          const results = await Promise.allSettled(
+            ids.map((deviceId) => fetchDeviceDetail(deviceId)),
+          );
+          if (cancelled) {
+            return;
+          }
+          const nextDevices = [];
+          const failures = [];
+          results.forEach((result, index) => {
+            const targetId = ids[index];
+            if (result.status === "fulfilled" && result.value) {
+              const detail = result.value;
+              nextDevices.push({
+                ...detail,
+                id: detail?.id ?? targetId,
+              });
+            } else {
+              failures.push(targetId);
+            }
+          });
+          setAssociatedDevices(nextDevices);
+          if (failures.length > 0) {
+            setAssociatedDevicesError(`일부 장비 정보를 불러오지 못했습니다: ${failures.join(", ")}`);
+          } else {
+            setAssociatedDevicesError(null);
+          }
+        } catch (err) {
+          console.error(err);
+          if (!cancelled) {
+            setAssociatedDevices([]);
+            setAssociatedDevicesError("선택된 장비 정보를 불러오는 중 문제가 발생했습니다.");
+          }
+        } finally {
+          if (!cancelled) {
+            setIsAssociatedDevicesLoading(false);
+          }
+        }
+      };
+
+      loadAssociatedDevices();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [approvalDeviceIds]);
+
+    const buildInitialOverrides = useCallback(() => {
+      if (!approval) {
+        return {};
+      }
+
+      const nextOverrides = {};
+      const defaultMode = (approval?.realUserMode ?? "auto").toLowerCase() === "manual" ? "manual" : "auto";
+
+      if (deviceItems.length > 0) {
+        deviceItems.forEach((item, index) => {
+          const rawId = item?.deviceId ?? approvalDeviceIds[index];
+          if (!rawId) {
+            return;
+          }
+          const id = String(rawId);
+          const fallback = associatedDeviceMap.get(id) || {};
+          const row = deviceRowMap.get(id) || {};
+          const initialStatus = (item?.status ?? row?.status ?? fallback.status ?? "").trim();
+          const initialTags = dedupeTagNames(
+            Array.isArray(fallback?.tags) ? fallback.tags : [],
+          );
+          const mode = (item?.requestedRealUserMode ?? defaultMode).toLowerCase() === "manual" ? "manual" : "auto";
+          nextOverrides[id] = {
+            deviceId: id,
+            projectName:
+              item?.requestedProjectName
+              ?? approval?.tmpProjectName
+              ?? fallback.projectName
+              ?? "",
+            projectCode:
+              item?.requestedProjectCode
+              ?? approval?.tmpProjectCode
+              ?? fallback.projectCode
+              ?? "",
+            departmentName:
+              item?.requestedDepartmentName
+              ?? approval?.tmpDepartmentName
+              ?? fallback.manageDepName
+              ?? "",
+            departmentCode:
+              item?.requestedDepartmentCode
+              ?? approval?.tmpDepartmentCode
+              ?? fallback.manageDepCode
+              ?? "",
+            realUserMode: mode,
+            realUser: mode === "manual"
+              ? item?.requestedRealUser ?? fallback.realUser ?? ""
+              : "",
+            status: initialStatus,
+            tags: initialTags,
+            tagInput: "",
+          };
+        });
+      } else {
+        approvalDeviceIds.forEach((rawId) => {
+          if (!rawId) {
+            return;
+          }
+          const id = String(rawId);
+          const fallback = associatedDeviceMap.get(id) || {};
+          const row = deviceRowMap.get(id) || {};
+          const initialStatus = (row?.status ?? fallback.status ?? "").trim();
+          const initialTags = dedupeTagNames(
+            Array.isArray(fallback?.tags) ? fallback.tags : [],
+          );
+          const mode = defaultMode;
+          nextOverrides[id] = {
+            deviceId: id,
+            projectName: approval?.tmpProjectName ?? fallback.projectName ?? "",
+            projectCode: approval?.tmpProjectCode ?? fallback.projectCode ?? "",
+            departmentName: approval?.tmpDepartmentName ?? fallback.manageDepName ?? "경영지원부",
+            departmentCode: approval?.tmpDepartmentCode ?? fallback.manageDepCode ?? "",
+            realUserMode: mode,
+            realUser: mode === "manual"
+              ? approval?.realUser ?? fallback.realUser ?? ""
+              : "",
+            status: initialStatus,
+            tags: initialTags,
+            tagInput: "",
+          };
+        });
+      }
+
+      return nextOverrides;
+    }, [approval, approvalDeviceIds, associatedDeviceMap, deviceItems, deviceRowMap]);
+
+    useEffect(() => {
+      if (!approval) {
+        setDeviceOverrides({});
         return;
       }
-      if (!projectComboRef.current.contains(event.target)) {
-        setIsProjectDropdownOpen(false);
+      const initialOverrides = buildInitialOverrides();
+      setDeviceOverrides(initialOverrides);
+      const seededTags = dedupeTagNames(
+        Object.values(initialOverrides || {}).flatMap((entry) => (Array.isArray(entry?.tags) ? entry.tags : [])),
+      );
+      if (seededTags.length > 0) {
+        setTagOptions((prev) => mergeTagOptions(prev, seededTags));
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isProjectDropdownOpen) {
-      setProjectSearchTerm("");
-    }
-  }, [isProjectDropdownOpen]);
-
+    }, [approval, buildInitialOverrides]);
   const buildEditFormFromApproval = useCallback(() => {
     if (!approval) {
       return null;
     }
     const initialDeadline = extractDateString(approval.deadline) || todayDateString();
-    let initialRealUser = approval.realUser ?? approval.userName ?? "";
-    let realUserMode = "auto";
-    if (approval.userName && initialRealUser && approval.userName !== initialRealUser) {
-      realUserMode = "manual";
-    } else if (!initialRealUser && approval.userName) {
-      initialRealUser = approval.userName;
-    }
 
     return {
       reason: approval.reason ?? "",
       usageStartDate: extractDateString(approval.usageStartDate),
       usageEndDate: extractDateString(approval.usageEndDate),
       deadlineDate: initialDeadline,
-      departmentName: approval.tmpDepartmentName ?? "",
-      projectName: approval.tmpProjectName ?? approval.projectName ?? "",
-      projectCode: approval.tmpProjectCode ?? approval.projectCode ?? "",
-      realUser: initialRealUser,
-      realUserMode,
     };
   }, [approval]);
 
@@ -499,53 +757,10 @@ export default function ApprovalDetail() {
     setIsEditing(false);
   }, [buildEditFormFromApproval]);
 
-  const filteredProjects = useMemo(() => {
-    const list = Array.isArray(projects) ? projects : [];
-    const keyword = projectSearchTerm.trim().toLowerCase();
-    if (!keyword) {
-      return list;
-    }
-    return list.filter((project) => {
-      const name = project?.name?.toLowerCase() ?? "";
-      const code = project?.code?.toLowerCase() ?? "";
-      return name.includes(keyword) || code.includes(keyword);
-    });
-  }, [projects, projectSearchTerm]);
-
-  const selectedProjectLabel = useMemo(() => {
-    if (!editForm) {
-      return "";
-    }
-    if (editForm.projectName && editForm.projectCode) {
-      return `${editForm.projectName} (${editForm.projectCode})`;
-    }
-    return editForm.projectName ?? "";
-  }, [editForm]);
-
   const refreshData = useCallback(async () => {
     await loadDetail();
     await loadComments();
   }, [loadDetail, loadComments]);
-
-  const toggleEditRealUserMode = (mode) => {
-    setEditForm((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      if (mode === "auto") {
-        const fallback = approval?.userName ?? prev.realUser ?? "";
-        return {
-          ...prev,
-          realUserMode: "auto",
-          realUser: fallback,
-        };
-      }
-      return {
-        ...prev,
-        realUserMode: "manual",
-      };
-    });
-  };
 
   const handleEditFieldChange = (field) => (event) => {
     const value = event.target.value;
@@ -585,21 +800,6 @@ export default function ApprovalDetail() {
     });
   };
 
-  const handleProjectSelect = (project) => {
-    setEditForm((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      return {
-        ...prev,
-        projectName: project?.name ?? "",
-        projectCode: project?.code ?? "",
-      };
-    });
-    setProjectSearchTerm("");
-    setIsProjectDropdownOpen(false);
-  };
-
   const handleStartEdit = () => {
     if (!canEditApplication) {
       return;
@@ -608,18 +808,18 @@ export default function ApprovalDetail() {
     setEditForm(current);
     setEditError(null);
     setIsEditing(true);
-    setIsProjectDropdownOpen(false);
-    setSelectedTags(initialTags);
-    setTagInput("");
+  setSelectedTags(initialTags);
+  setTagInput("");
+  setDeviceOverrides(buildInitialOverrides());
   };
 
   const handleCancelEdit = () => {
     setEditForm(buildEditFormFromApproval());
     setEditError(null);
     setIsEditing(false);
-    setIsProjectDropdownOpen(false);
-    setSelectedTags(initialTags);
-    setTagInput("");
+  setSelectedTags(initialTags);
+  setTagInput("");
+  setDeviceOverrides(buildInitialOverrides());
   };
 
   const handleTagSubmit = () => {
@@ -665,6 +865,215 @@ export default function ApprovalDetail() {
     setSelectedTags((prev) => removeTag(prev, normalized));
   };
 
+  const updateDeviceOverride = (deviceId, patch) => {
+    if (!deviceId) {
+      return;
+    }
+  setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key] ?? { deviceId: key };
+      const next = {
+        ...prev,
+        [key]: {
+          ...current,
+          ...patch,
+          deviceId: key,
+        },
+      };
+      const entry = next[key];
+      if (entry.realUserMode && entry.realUserMode !== "manual") {
+        entry.realUserMode = "auto";
+        entry.realUser = "";
+      }
+      if (entry.realUserMode === "manual" && typeof entry.realUser !== "string") {
+        entry.realUser = "";
+      }
+      return next;
+    });
+  };
+
+  const handleReturnDeviceStatusChange = (deviceId, value) => {
+    if (!deviceId) {
+      return;
+    }
+    const normalized = typeof value === "string" ? value.trim() : "";
+  setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key] ?? { deviceId: key };
+      if (current.status === normalized) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          deviceId: key,
+          status: normalized,
+        },
+      };
+    });
+  };
+
+  const handleReturnDeviceTagInputChange = (deviceId, value) => {
+    if (!deviceId) {
+      return;
+    }
+    setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key] ?? { deviceId: key, tags: [], tagInput: "" };
+      if (current.tagInput === value) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          deviceId: key,
+          tags: Array.isArray(current.tags) ? current.tags : [],
+          tagInput: value,
+        },
+      };
+    });
+  };
+
+  const handleReturnDeviceTagSubmit = (deviceId) => {
+    if (!deviceId) {
+      return;
+    }
+    let normalizedValue = null;
+    setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key] ?? { deviceId: key, tags: [], tagInput: "" };
+      const currentTags = Array.isArray(current.tags) ? current.tags : [];
+      const inputValue = typeof current.tagInput === "string" ? current.tagInput : "";
+      normalizedValue = normalizeTagName(inputValue);
+      if (!normalizedValue) {
+        if (!inputValue) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [key]: {
+            ...current,
+            deviceId: key,
+            tags: currentTags,
+            tagInput: "",
+          },
+        };
+      }
+      const already = hasTag(currentTags, normalizedValue);
+      const nextTags = already ? currentTags : dedupeTagNames([...currentTags, normalizedValue]);
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          deviceId: key,
+          tags: nextTags,
+          tagInput: "",
+        },
+      };
+    });
+    if (normalizedValue) {
+      setTagOptions((prev) => mergeTagOptions(prev, [normalizedValue]));
+    }
+  };
+
+  const handleReturnDeviceTagInputKeyDown = (deviceId) => (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleReturnDeviceTagSubmit(deviceId);
+    }
+  };
+
+  const toggleReturnDeviceTagSelection = (deviceId, tag) => {
+    if (!deviceId) {
+      return;
+    }
+    const normalized = normalizeTagName(tag);
+    if (!normalized) {
+      return;
+    }
+    setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key] ?? { deviceId: key, tags: [], tagInput: "" };
+      const currentTags = Array.isArray(current.tags) ? current.tags : [];
+      const selected = hasTag(currentTags, normalized);
+      const nextTags = selected
+        ? removeTag(currentTags, normalized)
+        : dedupeTagNames([...currentTags, normalized]);
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          deviceId: key,
+          tags: nextTags,
+        },
+      };
+    });
+    setTagOptions((prev) => mergeTagOptions(prev, [normalized]));
+  };
+
+  const removeReturnDeviceTag = (deviceId, tag) => {
+    if (!deviceId) {
+      return;
+    }
+    const normalized = normalizeTagName(tag);
+    if (!normalized) {
+      return;
+    }
+    setDeviceOverrides((prev) => {
+      const key = String(deviceId);
+      const current = prev[key];
+      if (!current) {
+        return prev;
+      }
+      const currentTags = Array.isArray(current.tags) ? current.tags : [];
+      if (!hasTag(currentTags, normalized)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          deviceId: key,
+          tags: removeTag(currentTags, normalized),
+        },
+      };
+    });
+  };
+
+  const applyOverrideToAll = (deviceId) => {
+    if (isReturnRequest) {
+      return;
+    }
+    if (!deviceId) {
+      return;
+    }
+    setDeviceOverrides((prev) => {
+      const source = prev[String(deviceId)];
+      if (!source) {
+        return prev;
+      }
+      const sanitizedMode = source.realUserMode === "manual" ? "manual" : "auto";
+      const sanitizedRealUser = sanitizedMode === "manual" ? source.realUser ?? "" : "";
+      const next = { ...prev };
+      visibleOverrideIds.forEach((id) => {
+        const current = next[id] ?? { deviceId: id };
+        next[id] = {
+          ...current,
+          deviceId: id,
+          projectName: source.projectName ?? "",
+          projectCode: source.projectCode ?? "",
+          departmentName: source.departmentName ?? "경영지원부",
+          departmentCode: source.departmentCode ?? "",
+          realUserMode: sanitizedMode,
+          realUser: sanitizedRealUser,
+        };
+      });
+      return next;
+    });
+  };
+
   const handleSaveEdit = async () => {
     if (!approval || !editForm) {
       return;
@@ -679,6 +1088,7 @@ export default function ApprovalDetail() {
       alert("신청 사유를 입력해 주세요.");
       return;
     }
+    const applicantAutoRealUser = normalizedUsername || "";
 
     const start = editForm.usageStartDate ?? "";
     const end = editForm.usageEndDate ?? "";
@@ -696,33 +1106,103 @@ export default function ApprovalDetail() {
       return;
     }
 
-    const resolvedRealUser = (editForm.realUserMode === "manual"
-      ? (editForm.realUser ?? "").trim()
-      : (approval.userName ?? editForm.realUser ?? "").trim()) || null;
+    if (visibleOverrideIds.length === 0) {
+      alert("연결된 장비 정보가 없습니다.");
+      return;
+    }
+
+    const seenDeviceIds = new Set();
+    let overridesPayload = [];
+
+    if (isReturnRequest) {
+      const missingStatusIds = [];
+      overridesPayload = [];
+      visibleOverrideIds.forEach((rawId) => {
+        const id = rawId != null ? String(rawId) : "";
+        if (!id || seenDeviceIds.has(id)) {
+          return;
+        }
+        seenDeviceIds.add(id);
+        const override = deviceOverrides[id] ?? { deviceId: id };
+        const statusValue = typeof override.status === "string" ? override.status.trim() : "";
+        const deviceTags = Array.isArray(override.tags) ? dedupeTagNames(override.tags) : [];
+        overridesPayload.push({
+          deviceId: id,
+          status: statusValue || null,
+          tags: deviceTags,
+        });
+        if (!statusValue) {
+          missingStatusIds.push(id);
+        }
+      });
+      if (missingStatusIds.length > 0) {
+        alert(`장비 상태를 선택해 주세요: ${missingStatusIds.join(", ")}`);
+        return;
+      }
+    } else {
+      const collected = [];
+      visibleOverrideIds.forEach((rawId) => {
+        const id = rawId != null ? String(rawId) : "";
+        if (!id || seenDeviceIds.has(id)) {
+          return;
+        }
+        seenDeviceIds.add(id);
+        const override = deviceOverrides[id] ?? { deviceId: id };
+        const modeKey = (override.realUserMode ?? "auto").toLowerCase() === "manual" ? "manual" : "auto";
+        const manualRealUser = modeKey === "manual" ? (override.realUser ?? "").trim() : "";
+        const resolvedRealUser = modeKey === "manual"
+          ? manualRealUser || null
+          : (applicantAutoRealUser || null);
+        collected.push({
+          deviceId: id,
+          projectName: (override.projectName ?? "").trim() || null,
+          projectCode: (override.projectCode ?? "").trim() || null,
+          departmentName: (override.departmentName ?? "경영지원부").trim() || null,
+          realUserMode: modeKey,
+          realUser: resolvedRealUser,
+        });
+      });
+      overridesPayload = collected;
+    }
+
+    if (overridesPayload.length === 0) {
+      alert("조정할 장비 정보를 찾지 못했습니다.");
+      return;
+    }
 
     const payload = {
       username: defaultUsername,
       reason: trimmedReason,
-      realUser: resolvedRealUser,
-      departmentName: (editForm.departmentName ?? "").trim() || null,
-      projectName: (editForm.projectName ?? "").trim() || null,
-      projectCode: (editForm.projectCode ?? "").trim() || null,
+      devices: overridesPayload,
       deadline: editForm.deadlineDate ? `${editForm.deadlineDate}T00:00:00` : null,
       usageStartDate: start ? `${start}T00:00:00` : null,
       usageEndDate: end ? `${end}T00:00:00` : null,
     };
 
-    if (approval?.type === "반납") {
-      payload.tags = dedupeTagNames(selectedTags);
+    if (isReturnRequest) {
+      const aggregatedTags = dedupeTagNames(overridesPayload.flatMap((item) => item.tags ?? []));
+      const primaryStatus = (overridesPayload[0]?.status ?? "").trim();
+      payload.tags = aggregatedTags;
+      payload.status = primaryStatus || null;
+      payload.deviceStatus = primaryStatus || null;
+      payload.realUser = null;
+      payload.realUserMode = "auto";
+      payload.departmentName = null;
+      payload.projectName = null;
+      payload.projectCode = null;
+    } else {
+      const primaryOverride = overridesPayload[0] ?? {};
+      payload.departmentName = primaryOverride.departmentName ?? "경영지원부";
+      payload.projectName = primaryOverride.projectName ?? null;
+      payload.projectCode = primaryOverride.projectCode ?? null;
     }
 
     setEditError(null);
     setIsSavingEdit(true);
     try {
       await updateApprovalApplication(Number(approvalId), payload);
-      alert("신청 정보가 수정되었습니다.");
-      setIsEditing(false);
-      setIsProjectDropdownOpen(false);
+    alert("신청 정보가 수정되었습니다.");
+    setIsEditing(false);
       await refreshData();
     } catch (err) {
       console.error(err);
@@ -953,208 +1433,123 @@ export default function ApprovalDetail() {
         </div>
       </div>
 
-      <section className="detail-grid">
-        <div className="detail-section">
+      <section className="detail-grid detail-grid--approval">
+        <div className="detail-section detail-section--applicant">
           <h3>신청 정보</h3>
           {isEditing && editForm ? (
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ko">
               {isMetadataLoading && <p className="muted">참조 정보를 불러오는 중입니다...</p>}
               {metadataError && <p className="error">{metadataError}</p>}
               {editError && <p className="error">{editError}</p>}
-              <div className="form-section-grid applicant-grid">
-                <label className="stretch">
+              <div className="form-section-grid applicant-grid applicant-grid--detail">
+                <label className="stretch applicant-grid__reason">
                   신청 사유
                   <textarea
+                    style={{ width: "96%" }}
                     rows={4}
                     value={editForm.reason}
                     onChange={handleEditFieldChange("reason")}
                     placeholder="신청 사유를 입력해 주세요."
                   />
                 </label>
-                <div className="applicant-column applicant-column--stacked">
-                  <RangeDateInput
-                    startDate={editForm.usageStartDate}
-                    endDate={editForm.usageEndDate}
-                    onChange={handleUsagePeriodEdit}
-                  />
+                {!isReturnRequest && !isDisposalRequest && (
+                  <div className="applicant-field applicant-field--range">
+                    <RangeDateInput
+                      startDate={editForm.usageStartDate}
+                      endDate={editForm.usageEndDate}
+                      onChange={handleUsagePeriodEdit}
+                    />
+                  </div>
+                )}
+                <div className="applicant-field applicant-field--deadline">
                   <DeadlineDateField
                     value={editForm.deadlineDate}
                     onChange={handleDeadlineChange}
                   />
                 </div>
-                <label className="real-user-field">
-                  실제 사용자
-                  <div className="input-group real-user-group">
+              </div>
+
+              {approval?.type === "반납" && !isReturnEditing && (
+                <div className="tag-edit-wrapper">
+                  <div className="tag-edit-header">
+                    <span className="tag-edit-title">태그</span>
+                    <div className="tag-meta">
+                      <span className="tag-status">
+                        {selectedTags.length > 0
+                          ? `선택된 태그 ${selectedTags.length}개`
+                          : "선택된 태그가 없습니다."}
+                      </span>
+                      {isTagLoading && (
+                        <span className="tag-status loading">태그를 불러오는 중입니다...</span>
+                      )}
+                      {tagFetchError && <span className="tag-status error">{tagFetchError}</span>}
+                    </div>
+                  </div>
+                  <div className="tag-input-row">
                     <input
                       type="text"
-                      value={editForm.realUser ?? ""}
-                      onChange={handleEditFieldChange("realUser")}
-                      placeholder="실제 사용자 이름"
-                      disabled={editForm.realUserMode !== "manual"}
+                      value={tagInput}
+                      onChange={(event) => setTagInput(event.target.value)}
+                      onKeyDown={handleTagInputKeyDown}
+                      placeholder="새 태그를 입력하고 Enter 키 또는 추가 버튼을 눌러주세요."
                     />
-                    <div className="group-buttons real-user-buttons">
-                      <button
-                        type="button"
-                        className={editForm.realUserMode !== "manual" ? "primary" : "outline"}
-                        onClick={() => toggleEditRealUserMode("auto")}
-                      >
-                        자동
-                      </button>
-                      <button
-                        type="button"
-                        className={editForm.realUserMode === "manual" ? "primary" : "outline"}
-                        onClick={() => toggleEditRealUserMode("manual")}
-                      >
-                        직접 입력
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="outline tag-add-button"
+                      onClick={handleTagSubmit}
+                      disabled={!normalizeTagName(tagInput)}
+                    >
+                      태그 추가
+                    </button>
                   </div>
-                </label>
-                <label className="device-info-label">
-                  관리부서
-                  <select
-                    value={editForm.departmentName ?? ""}
-                    onChange={handleEditFieldChange("departmentName")}
-                  >
-                    <option value="">선택하세요</option>
-                    {(departments ?? []).map((department, index) => (
-                      <option
-                        key={department?.id ?? department?.name ?? `department-${index}`}
-                        value={department?.name ?? ""}
-                      >
-                        {department?.name ?? ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="device-info-label">
-                  프로젝트
-                  <div className="combobox-wrapper" ref={projectComboRef}>
-                    <div className={`combobox${isProjectDropdownOpen ? " open" : ""}`}>
-                      <button
-                        type="button"
-                        className="combobox-trigger"
-                        onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
-                      >
-                        <span>{selectedProjectLabel || "프로젝트를 선택하세요"}</span>
-                        <span className="combobox-caret" aria-hidden>
-                          ▾
-                        </span>
-                      </button>
-                      {isProjectDropdownOpen && (
-                        <div className="combobox-panel">
-                          <input
-                            type="text"
-                            className="combobox-search"
-                            placeholder="프로젝트 이름 또는 코드를 검색하세요"
-                            value={projectSearchTerm}
-                            onChange={(event) => setProjectSearchTerm(event.target.value)}
-                            autoFocus
-                          />
-                          <div className="combobox-list">
-                            {filteredProjects.length === 0 && (
-                              <p className="combobox-empty">검색 결과가 없습니다.</p>
-                            )}
-                            {filteredProjects.map((project, index) => (
-                              <button
-                                type="button"
-                                key={project?.id ?? `${project?.name ?? "project"}-${project?.code ?? index}`}
-                                className="combobox-option"
-                                onClick={() => handleProjectSelect(project)}
-                              >
-                                <span className="combobox-option-name">{project?.name ?? ""}</span>
-                                {project?.code && (
-                                  <span className="combobox-option-code">{project.code}</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </label>
-                {approval?.type === "반납" && (
-                  <div className="tag-edit-wrapper">
-                    <div className="tag-edit-header">
-                      <span className="tag-edit-title">태그</span>
-                      <div className="tag-meta">
-                        <span className="tag-status">
-                          {selectedTags.length > 0
-                            ? `선택된 태그 ${selectedTags.length}개`
-                            : "선택된 태그가 없습니다."}
-                        </span>
-                        {isTagLoading && (
-                          <span className="tag-status loading">태그를 불러오는 중입니다...</span>
-                        )}
-                        {tagFetchError && <span className="tag-status error">{tagFetchError}</span>}
-                      </div>
-                    </div>
-                    <div className="tag-input-row">
-                      <input
-                        type="text"
-                        value={tagInput}
-                        onChange={(event) => setTagInput(event.target.value)}
-                        onKeyDown={handleTagInputKeyDown}
-                        placeholder="새 태그를 입력하고 Enter 키 또는 추가 버튼을 눌러주세요."
-                      />
-                      <button
-                        type="button"
-                        className="outline tag-add-button"
-                        onClick={handleTagSubmit}
-                        disabled={!normalizeTagName(tagInput)}
-                      >
-                        태그 추가
-                      </button>
-                    </div>
-                    <p className="tag-hint">
-                      태그는 반납 신청 시 장비 상태를 빠르게 파악하는 데 사용됩니다. 자주 쓰는 태그를 선택하거나 직접 추가할 수 있어요.
-                    </p>
-                    <div className="tag-options">
-                      {tagOptions.length === 0 ? (
-                        <span className="tag-status muted">표시할 태그가 없습니다.</span>
-                      ) : (
-                        tagOptions.map((option) => {
-                          const normalized = normalizeTagName(option);
-                          if (!normalized) {
-                            return null;
-                          }
-                          const selected = hasTag(selectedTags, normalized);
-                          return (
-                            <div
-                              key={tagKey(normalized)}
-                              className={`tag-chip${selected ? " selected" : ""}`}
-                              onClick={() => toggleTagSelection(normalized)}
-                              role="button"
-                              tabIndex={0}
-                              aria-pressed={selected}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  toggleTagSelection(normalized);
-                                }
+                  <p className="tag-hint">
+                    태그는 반납 신청 시 장비 상태를 빠르게 파악하는 데 사용됩니다. 자주 쓰는 태그를 선택하거나 직접 추가할 수 있어요.
+                  </p>
+                  <div className="tag-options">
+                    {tagOptions.length === 0 ? (
+                      <span className="tag-status muted">표시할 태그가 없습니다.</span>
+                    ) : (
+                      tagOptions.map((option) => {
+                        const normalized = normalizeTagName(option);
+                        if (!normalized) {
+                          return null;
+                        }
+                        const selected = hasTag(selectedTags, normalized);
+                        return (
+                          <div
+                            key={tagKey(normalized)}
+                            className={`tag-chip${selected ? " selected" : ""}`}
+                            onClick={() => toggleTagSelection(normalized)}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={selected}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                toggleTagSelection(normalized);
+                              }
+                            }}
+                          >
+                            <span className="tag-label">{normalized}</span>
+                            <button
+                              type="button"
+                              className="remove-btn"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                handleRemoveTagOption(normalized);
                               }}
+                              aria-label={`태그 ${normalized} 삭제`}
                             >
-                              <span className="tag-label">{normalized}</span>
-                              <button
-                                type="button"
-                                className="remove-btn"
-                                onClick={(ev) => {
-                                  ev.stopPropagation();
-                                  handleRemoveTagOption(normalized);
-                                }}
-                                aria-label={`태그 ${normalized} 삭제`}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
               <div className="form-actions form-actions--tight">
                 <button type="button" className="primary" onClick={handleSaveEdit} disabled={isSavingEdit}>
                   {isSavingEdit ? "저장 중..." : "저장"}
@@ -1171,10 +1566,6 @@ export default function ApprovalDetail() {
                 <dd>{approval.userName ?? "-"}</dd>
               </div>
               <div>
-                <dt>실제 사용자</dt>
-                <dd>{approval.realUser ?? "-"}</dd>
-              </div>
-              <div>
                 <dt>다음 결재자</dt>
                 <dd>{nextPending?.username ?? "-"}</dd>
               </div>
@@ -1186,14 +1577,18 @@ export default function ApprovalDetail() {
                 <dt>신청일</dt>
                 <dd>{formatDateTime(approval.createdDate)}</dd>
               </div>
-              <div>
-                <dt>사용 시작일</dt>
-                <dd>{formatDateOnly(approval.usageStartDate)}</dd>
-              </div>
-              <div>
-                <dt>사용 종료일</dt>
-                <dd>{formatDateOnly(approval.usageEndDate)}</dd>
-              </div>
+              {!isReturnRequest && !isDisposalRequest && (
+                <>
+                  <div>
+                    <dt>사용 시작일</dt>
+                    <dd>{formatDateOnly(approval.usageStartDate)}</dd>
+                  </div>
+                  <div>
+                    <dt>사용 종료일</dt>
+                    <dd>{formatDateOnly(approval.usageEndDate)}</dd>
+                  </div>
+                </>
+              )}
               <div>
                 <dt>신청 마감일</dt>
                 <dd>{formatDateOnly(approval.deadline)}</dd>
@@ -1206,53 +1601,453 @@ export default function ApprovalDetail() {
                   </pre>
                 </dd>
               </div>
-              {approval.type === "반납" && (
-                <div>
-                  <dt>태그</dt>
-                  <dd>
-                    {initialTags.length > 0 ? (
-                      <div className="tag-view-list">
-                        {initialTags.map((tag) => (
-                          <span key={tagKey(tag)} className="tag-pill">{tag}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </dd>
-                </div>
-              )}
             </dl>
           )}
         </div>
 
-        <div className="detail-section">
+        <div className="detail-section detail-section--devices">
           <h3>장비 정보</h3>
-          <dl>
-            <div>
-              <dt>장비 ID</dt>
-              <dd>{approval.deviceId ?? "-"}</dd>
+          
+          {isEditing && editForm && !isDisposalRequest && (
+            <>
+             <p className="muted">
+              {isReturnEditing
+                ? "반납 신청 장비마다 반납 상태와 태그를 조정할 수 있습니다."
+                : "각 장비마다 프로젝트, 관리부서, 실제 사용자 정보를 개별로 조정할 수 있습니다."}
+            </p>
+            <div className="table-wrapper table-wrapper--device-overrides">
+              <div className="table-wrapper__scroll">
+                <table className={`device-overrides-table ${isReturnEditing ? 'return-editing' : ''}`}>
+                  <thead>
+                    <tr>
+                      <th>관리번호</th>
+                      {isReturnEditing ? (
+                        <>
+                          <th>반납 상태</th>
+                          <th>장비 태그</th>
+                          <th>현재 정보</th>
+                        </>
+                      ) : (
+                        <>
+                          <th>요청 프로젝트</th>
+                          <th>요청 부서</th>
+                          <th>실제 사용자</th>
+                          <th>현재 정보</th>
+                          <th>작업</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleOverrideIds.length === 0 ? (
+                      <tr>
+                        <td colSpan={isReturnEditing ? 4 : 6} className="muted">
+                          조정할 장비 정보가 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleOverrideIds.map((id, index) => {
+                        const key = String(id);
+                        const override = deviceOverrides[key] ?? { deviceId: key };
+                        const row = deviceRowMap.get(key) || deviceRows[index] || {};
+                        if (isReturnEditing) {
+                          const statusValue = typeof override.status === "string" ? override.status.trim() : "";
+                          const deviceTags = Array.isArray(override.tags) ? override.tags : [];
+                          const tagInputValue = typeof override.tagInput === "string" ? override.tagInput : "";
+                          const currentStatus = row.status ?? row.currentStatus ?? "-";
+
+                          return (
+                            <tr key={key}>
+                              <td>
+                                <div className="device-overrides-meta">
+                                  <strong>{row.deviceId || key}</strong>
+                                  {row.categoryName && row.categoryName !== "-" && (
+                                    <span>{row.categoryName}</span>
+                                  )}
+                                  {currentStatus && currentStatus !== "-" && (
+                                    <span className="muted">현재 상태: {currentStatus}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <select
+                                  value={statusValue}
+                                  onChange={(event) => handleReturnDeviceStatusChange(key, event.target.value)}
+                                >
+                                  {returnStatusOptions.map((option) => (
+                                    <option key={`${key}-status-${option}`} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <div className="device-return-tags">
+                                  <div className="tag-input-row">
+                                    <input
+                                      type="text"
+                                      value={tagInputValue}
+                                      onChange={(event) => handleReturnDeviceTagInputChange(key, event.target.value)}
+                                      onKeyDown={handleReturnDeviceTagInputKeyDown(key)}
+                                      placeholder="태그 입력 후 Enter 또는 추가 버튼"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="outline tag-add-button"
+                                      onClick={() => handleReturnDeviceTagSubmit(key)}
+                                      disabled={!normalizeTagName(tagInputValue)}
+                                    >
+                                      태그 추가
+                                    </button>
+                                  </div>
+                                  <div className="tag-view-list">
+                                    {deviceTags.length === 0 ? (
+                                      <span className="tag-status muted">선택된 태그가 없습니다.</span>
+                                    ) : (
+                                      deviceTags.map((tag) => {
+                                        const normalizedTag = normalizeTagName(tag);
+                                        if (!normalizedTag) {
+                                          return null;
+                                        }
+                                        return (
+                                          <div key={`${key}-selected-${tagKey(normalizedTag)}`} className="tag-chip selected">
+                                            <span className="tag-label">{normalizedTag}</span>
+                                            <button
+                                              type="button"
+                                              className="remove-btn"
+                                              onClick={(ev) => {
+                                                ev.stopPropagation();
+                                                removeReturnDeviceTag(key, normalizedTag);
+                                              }}
+                                              aria-label={`태그 ${normalizedTag} 제거`}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                  {tagOptions.length > 0 && (
+                                    <div className="tag-options" style={{ marginTop: "4px" }}>
+                                      {tagOptions.map((option) => {
+                                        const normalizedOption = normalizeTagName(option);
+                                        if (!normalizedOption) {
+                                          return null;
+                                        }
+                                        const selected = hasTag(deviceTags, normalizedOption);
+                                        return (
+                                          <div
+                                            key={`${key}-option-${tagKey(normalizedOption)}`}
+                                            className={`tag-chip${selected ? " selected" : ""}`}
+                                            onClick={() => toggleReturnDeviceTagSelection(key, normalizedOption)}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={selected}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                toggleReturnDeviceTagSelection(key, normalizedOption);
+                                              }
+                                            }}
+                                          >
+                                            <span className="tag-label">{normalizedOption}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <div className="device-overrides-current">
+                                  <div>
+                                    <span className="device-overrides-current-label">프로젝트</span>
+                                    <span className="device-overrides-current-value">{row.currentProjectName ?? "-"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="device-overrides-current-label">부서</span>
+                                    <span className="device-overrides-current-value">{row.currentDepartmentName ?? "-"}</span>
+                                  </div>
+                                  <div>
+                                    <span className="device-overrides-current-label">실제 사용자</span>
+                                    <span className="device-overrides-current-value">{row.currentRealUser ?? "-"}</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        const mode = (override.realUserMode ?? "auto").toLowerCase() === "manual" ? "manual" : "auto";
+                        const manualDisabled = mode !== "manual";
+
+                        const fallbackRequestedProject = row.requestedProjectName && row.requestedProjectName !== "-"
+                          ? row.requestedProjectName
+                          : "";
+                        const fallbackRequestedProjectCode = row.requestedProjectCode && row.requestedProjectCode !== "-"
+                          ? row.requestedProjectCode
+                          : "";
+                        const fallbackCurrentProject = row.currentProjectName && row.currentProjectName !== "-"
+                          ? row.currentProjectName
+                          : "";
+                        const fallbackCurrentProjectCode = row.currentProjectCode && row.currentProjectCode !== "-"
+                          ? row.currentProjectCode
+                          : "";
+                        const resolvedProjectName = (override.projectName ?? fallbackRequestedProject ?? fallbackCurrentProject ?? "").trim();
+                        const resolvedProjectCode = (override.projectCode ?? fallbackRequestedProjectCode ?? fallbackCurrentProjectCode ?? "").trim();
+                        const selectedProject = resolvedProjectName || resolvedProjectCode
+                          ? { name: resolvedProjectName, code: resolvedProjectCode }
+                          : null;
+                        const displayProject = resolvedProjectName || resolvedProjectCode
+                          ? [resolvedProjectName || resolvedProjectCode, resolvedProjectName && resolvedProjectCode ? `(${resolvedProjectCode})` : ""].filter(Boolean).join(" ")
+                          : fallbackRequestedProject || fallbackCurrentProject || "-";
+
+                        const fallbackRequestedDepartment = row.requestedDepartmentName && row.requestedDepartmentName !== "-"
+                          ? row.requestedDepartmentName
+                          : "";
+                        const fallbackCurrentDepartment = row.currentDepartmentName && row.currentDepartmentName !== "-"
+                          ? row.currentDepartmentName
+                          : "";
+                        const selectedDepartmentName = (override.departmentName ?? fallbackRequestedDepartment ?? "").trim();
+                        const displayDepartment = selectedDepartmentName || fallbackCurrentDepartment || "-";
+
+                        const fallbackRequestedUser = normalizeName(
+                          row.requestedRealUser && row.requestedRealUser !== "-"
+                            ? row.requestedRealUser
+                            : "",
+                        );
+                        const fallbackCurrentUser = normalizeName(
+                          row.currentRealUser && row.currentRealUser !== "-"
+                            ? row.currentRealUser
+                            : "",
+                        );
+                        const applicantName = normalizeName(approval?.userName ?? defaultUsername ?? "");
+                        const autoRealUserDisplay = isEditing
+                          ? applicantName
+                          : (fallbackRequestedUser || fallbackCurrentUser);
+                        const manualRealUser = normalizeName(override.realUser ?? "");
+                        const resolvedInputRealUser = mode === "manual"
+                          ? manualRealUser || ""
+                          : autoRealUserDisplay || "";
+                        const displayRealUser = mode === "manual"
+                          ? manualRealUser || "-"
+                          : autoRealUserDisplay || "-";
+                        
+
+                        return (
+                          <tr key={key}>
+                            <td>
+                              <div className="device-overrides-meta">
+                                <strong>{row.deviceId || key}</strong>
+                                {row.categoryName && row.categoryName !== "-" && (
+                                  <span>{row.categoryName}</span>
+                                )}
+                                {row.status && row.status !== "-" && (
+                                  <span className="muted">{row.status}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-project">
+                                <ProjectCombobox
+                                  projects={projects}
+                                  selectedProject={selectedProject}
+                                  onSelect={(project) => {
+                                    updateDeviceOverride(key, {
+                                      projectName: project?.name ?? "",
+                                      projectCode: project?.code ?? "",
+                                    });
+                                  }}
+                                  disabled={projects.length === 0}
+                                  panelClassName="combobox-panel--stretch"
+                                  searchInputClassName="combobox-search--full"
+                                  listClassName="combobox-options combobox-options--scroll"
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <select
+                                value={selectedDepartmentName}
+                                onChange={(event) => {
+                                  const nextName = event.target.value;
+                                  const matched = departments.find((department) => department.name === nextName || department.code === nextName);
+                                  updateDeviceOverride(key, {
+                                    departmentName: nextName,
+                                    departmentCode: matched?.code ?? "",
+                                  });
+                                }}
+                              >
+                                {departments.map((department) => (
+                                  <option key={department.id ?? department.code ?? department.name} value={department.name}>
+                                    {department.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <div className="device-overrides-user">
+                                <select
+                                  value={mode}
+                                  onChange={(event) => {
+                                    const nextMode = event.target.value;
+                                    updateDeviceOverride(key, {
+                                      realUserMode: nextMode,
+                                      realUser: nextMode === "manual"
+                                        ? manualRealUser || ""
+                                        : isEditing ? applicantName : "",
+                                    });
+                                  }}
+                                >
+                                  <option value="auto">자동</option>
+                                  <option value="manual">직접 입력</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  value={resolvedInputRealUser}
+                                  onChange={(event) => updateDeviceOverride(key, { realUser: event.target.value })}
+                                  placeholder={mode === "manual" ? "실제 사용자 이름" : "자동 지정"}
+                                  disabled={manualDisabled}
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <div>
+                                  <span className="device-overrides-current-label">프로젝트</span>
+                                  <span className="device-overrides-current-value">{displayProject}</span>
+                                </div>
+                                <div>
+                                  <span className="device-overrides-current-label">부서</span>
+                                  <span className="device-overrides-current-value">{displayDepartment}</span>
+                                </div>
+                                <div>
+                                  <span className="device-overrides-current-label">실제 사용자</span>
+                                  <span className="device-overrides-current-value">{displayRealUser}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-actions">
+                                <button
+                                  type="button"
+                                  className="outline small-button"
+                                  onClick={() => applyOverrideToAll(key)}
+                                >
+                                  전체 적용
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div>
-              <dt>품목</dt>
-              <dd>{approval.categoryName ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>상태</dt>
-              <dd>{approval.deviceStatus ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>프로젝트</dt>
-              <dd>{approval.tmpProjectName ?? approval.projectName ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>부서</dt>
-              <dd>{approval.tmpDepartmentName ?? "-"}</dd>
-            </div>
-          </dl>
+            </>
+          )}
+          {!(isEditing && isReturnRequest) && (
+            <>
+              {isAssociatedDevicesLoading && <p className="muted">선택된 장비 정보를 불러오는 중입니다...</p>}
+              {associatedDevicesError && <p className="error">{associatedDevicesError}</p>}
+              {deviceRows.length > 0 ? (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>관리번호</th>
+                        <th>품목</th>
+                        <th>용도</th>
+                        <th>상태</th>
+                        <th>요청 정보</th>
+                        <th>현재 정보</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deviceRows.map((row) => {
+                        const key = row.deviceId ?? row.key;
+                        const overrideEntry = key != null ? deviceOverrides[String(key)] : null;
+                        const deviceTags = dedupeTagNames(
+                          Array.isArray(overrideEntry?.tags) ? overrideEntry.tags : [],
+                        );
+                        const shouldUseDefaultRequestInfo = isReturnRequest || isDisposalRequest;
+                        const requestedProjectDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_PROJECT
+                          : row.requestedProjectName ?? "-";
+                        const requestedDepartmentDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_DEPARTMENT
+                          : row.requestedDepartmentName ?? "-";
+                        const requestedRealUserDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_REAL_USER
+                          : row.requestedRealUser ?? "-";
+                        return (
+                          <tr key={key}>
+                            <td>{row.deviceId ?? "-"}</td>
+                            <td>{row.categoryName ?? "-"}</td>
+                            <td>{row.purpose ?? "-"}</td>
+                            <td>{row.status ?? "-"}</td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <span>프로젝트: {requestedProjectDisplay}</span>
+                                <span>관리부서: {requestedDepartmentDisplay}</span>
+                                <span>실사용자: {requestedRealUserDisplay}</span>
+                                {isReturnRequest && (
+                                  <div className="device-tag-view">
+                                    <span>태그:</span>
+                                    {deviceTags.length > 0 ? (
+                                      <div className="tag-view-list">
+                                        {deviceTags.map((tag) => (
+                                          <span key={`${key}-tag-${tagKey(tag)}`} className="tag-pill">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span>-</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <span>프로젝트: {row.currentProjectName ?? "-"}</span>
+                                <span>관리부서: {row.currentDepartmentName ?? "-"}</span>
+                                <span>실사용자: {row.currentRealUser ?? "-"}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : approvalDeviceIds.length > 0 ? (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>관리번호</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {approvalDeviceIds.map((deviceId) => (
+                        <tr key={deviceId}>
+                          <td>{deviceId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted">연결된 장비 정보가 없습니다.</p>
+              )}
+            </>
+          )}
         </div>
 
-        <div className="detail-section">
+        <div className="detail-section detail-section--flow">
           <h3>승인 흐름</h3>
           <ul className="approver-steps">
             {(approval.approvers ?? []).map((approver) => {
