@@ -144,6 +144,7 @@ export default function MyAssets() {
   const navigate = useNavigate();
 
   const [devices, setDevices] = useState([]);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState([]);
   const [metadata, setMetadata] = useState(emptyMetadata);
   const [pageSizeOptions, setPageSizeOptions] = useState(defaultPageSizeOptions);
   const [chipFilter, setChipFilter] = useState("ALL");
@@ -210,7 +211,19 @@ export default function MyAssets() {
       const pageData = await fetchMyDevices(params);
 
       const content = Array.isArray(pageData?.content) ? pageData.content : [];
-      setDevices(content.map(enrichDevice));
+      const enriched = content.map(enrichDevice);
+      setDevices(enriched);
+      setSelectedDeviceIds((prev) => prev.filter((id) => enriched.some((device) => {
+        if (!device || device.id == null) {
+          return false;
+        }
+        const normalizedId = device.id.toString();
+        const normalizedStatus = (device.approvalInfo || "").replace(/\s+/g, "");
+        const hasPendingApproval = pendingApprovalStatuses.has(normalizedStatus);
+        const isInUse = device.isUsable === false;
+        const canSubmitFollowup = isInUse && !hasPendingApproval;
+        return normalizedId === id && canSubmitFollowup;
+      })));
 
       const totalElements = Number(pageData?.totalElements ?? 0);
       setTotalItems(Number.isNaN(totalElements) ? 0 : totalElements);
@@ -327,6 +340,31 @@ export default function MyAssets() {
     setCurrentPage(1);
   };
 
+  useEffect(() => {
+    setSelectedDeviceIds([]);
+  }, [filterKey, keyword, chipFilter, pageSize]);
+
+  const toggleSelection = (deviceId, selectable = true) => {
+    if (!selectable || deviceId == null) {
+      return;
+    }
+    const normalizedId = deviceId.toString();
+    setSelectedDeviceIds((prev) =>
+      prev.includes(normalizedId)
+        ? prev.filter((id) => id !== normalizedId)
+        : [...prev, normalizedId]
+    );
+  };
+
+  const handleBulkAction = (action) => {
+    if (selectedDeviceIds.length === 0) {
+      return;
+    }
+    const uniqueIds = Array.from(new Set(selectedDeviceIds));
+    const query = new URLSearchParams({ ids: uniqueIds.join(",") }).toString();
+    navigate(`/mypage/my-assets/${action}?${query}`, { state: { deviceIds: uniqueIds } });
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="card">
@@ -342,6 +380,32 @@ export default function MyAssets() {
         <div>
           <h2>나의 장비</h2>
           <p className="muted">내게 배정된 장비와 진행 상태를 확인할 수 있습니다.</p>
+        </div>
+        <div
+          className="card-actions"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}
+        >
+          {selectedDeviceIds.length > 0 && (
+            <span className="muted" style={{ fontSize: 13 }}>
+              선택 {selectedDeviceIds.length}대
+            </span>
+          )}
+          <button
+            type="button"
+            className="outline"
+            onClick={() => handleBulkAction("return")}
+            disabled={selectedDeviceIds.length === 0}
+          >
+            일괄 반납
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => handleBulkAction("disposal")}
+            disabled={selectedDeviceIds.length === 0}
+          >
+            일괄 폐기
+          </button>
         </div>
       </div>
 
@@ -395,6 +459,7 @@ export default function MyAssets() {
           <table>
             <thead>
               <tr>
+                <th aria-label="선택" />
                 <th onClick={() => toggleSort("categoryName")} style={{ cursor: "pointer" }}>
                   품목 {sortKey === "categoryName" ? (sortDirection === "asc" ? "↑" : "↓") : ""}
                 </th>
@@ -423,16 +488,25 @@ export default function MyAssets() {
             <tbody>
               {devices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="empty">등록된 장비가 없습니다.</td>
+                  <td colSpan={10} className="empty">등록된 장비가 없습니다.</td>
                 </tr>
               ) : (
                 devices.map((device) => {
+                  const normalizedId = device.id != null ? device.id.toString() : "";
                   const description = device.description ?? "";
                   const truncated = truncate(description, 50);
                   const normalizedStatus = (device.approvalInfo || "").replace(/\s+/g, "");
                   const hasPendingApproval = pendingApprovalStatuses.has(normalizedStatus);
                   const isInUse = device.isUsable === false;
                   const canSubmitFollowup = isInUse && !hasPendingApproval;
+                  const isSelected = normalizedId && selectedDeviceIds.includes(normalizedId);
+
+                  const handleRowClick = (event) => {
+                    if (event.target.closest('input,button,a,select,textarea')) {
+                      return;
+                    }
+                    toggleSelection(device.id, canSubmitFollowup);
+                  };
 
                   const purposeContent = device.spec ? (
                     <Tooltip
@@ -464,7 +538,29 @@ export default function MyAssets() {
                   );
 
                   return (
-                    <tr key={device.id}>
+                    <tr
+                      key={device.id}
+                      className={isSelected ? "selected-row" : ""}
+                      onClick={handleRowClick}
+                      style={{
+                        cursor: canSubmitFollowup ? "pointer" : "default",
+                        backgroundColor: isSelected ? "#f3f9ff" : undefined,
+                      }}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="selection-checkbox"
+                          checked={isSelected}
+                          disabled={!canSubmitFollowup}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleSelection(device.id, canSubmitFollowup);
+                          }}
+                          onChange={() => {}}
+                          aria-label={`${device.categoryName ?? "장비"} ${device.id} 선택`}
+                        />
+                      </td>
                       <td>{device.categoryName ?? "-"}</td>
                       <td>{device.id ?? "-"}</td>
                       <td>{device.displayUser || "-"}</td>
@@ -475,7 +571,14 @@ export default function MyAssets() {
                       <td>{descriptionCell}</td>
                       <td>
                         <div className="table-actions">
-                          <button type="button" className="secondary" onClick={() => handleOpenModal(device)}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleOpenModal(device);
+                            }}
+                          >
                             비고 수정
                           </button>
                           {canSubmitFollowup && (
@@ -483,14 +586,20 @@ export default function MyAssets() {
                               <button
                                 type="button"
                                 className="outline"
-                                onClick={() => navigate(`/mypage/my-assets/${device.id}/return`)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/mypage/my-assets/${device.id}/return`);
+                                }}
                               >
                                 반납
                               </button>
                               <button
                                 type="button"
                                 className="danger"
-                                onClick={() => navigate(`/mypage/my-assets/${device.id}/disposal`)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/mypage/my-assets/${device.id}/disposal`);
+                                }}
                               >
                                 폐기
                               </button>

@@ -117,6 +117,7 @@ export default function DeviceApplication() {
   const [deviceOverrides, setDeviceOverrides] = useState({});
     const projectDropdownRefs = useRef(new Map());
     const [projectDropdownState, setProjectDropdownState] = useState({ deviceId: null, search: "" });
+  const [deviceValidation, setDeviceValidation] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +178,55 @@ export default function DeviceApplication() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [projectDropdownState.deviceId]);
+
+  useEffect(() => {
+    const activeId = projectDropdownState.deviceId;
+    if (!activeId) {
+      return undefined;
+    }
+
+    const wrapper = projectDropdownRefs.current.get(activeId);
+    if (!wrapper) {
+      return undefined;
+    }
+
+    const trigger = wrapper.querySelector(".combobox-trigger");
+    const panel = wrapper.querySelector(".combobox-panel");
+    if (!trigger || !panel) {
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      const rect = trigger.getBoundingClientRect();
+      const viewportPadding = 12;
+      let left = rect.left;
+      const width = rect.width;
+      const maxLeft = window.innerWidth - viewportPadding - width;
+      if (left > maxLeft) {
+        left = Math.max(viewportPadding, maxLeft);
+      } else {
+        left = Math.max(viewportPadding, left);
+      }
+
+      panel.style.position = "fixed";
+      panel.style.left = `${left}px`;
+      panel.style.top = `${rect.bottom + 8}px`;
+      panel.style.width = `${width}px`;
+
+      const availableBelow = window.innerHeight - rect.bottom - 24;
+      const maxHeight = Math.max(200, Math.min(360, availableBelow));
+      panel.style.maxHeight = `${maxHeight}px`;
+    };
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [projectDropdownState.deviceId]);
 
@@ -378,6 +428,57 @@ export default function DeviceApplication() {
         [deviceId]: { ...current, ...patch, deviceId },
       };
     });
+    // clear validation flags for fields that were updated
+    setDeviceValidation((prev) => {
+      const next = { ...prev };
+      const entry = { ...(next[deviceId] || {}) };
+      if (Object.prototype.hasOwnProperty.call(patch, "departmentName")) {
+        delete entry.department;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "projectName")) {
+        delete entry.project;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "realUser")) {
+        delete entry.realUser;
+      }
+      if (Object.keys(entry).length === 0) {
+        delete next[deviceId];
+      } else {
+        next[deviceId] = entry;
+      }
+      return next;
+    });
+  };
+
+  const validateDevices = () => {
+    const errors = {};
+    selectedDevices.forEach((device) => {
+      const id = device?.id != null ? String(device.id) : null;
+      if (!id) return;
+      const override = deviceOverrides[id] ?? {};
+      const department = (override.departmentName ?? form.departmentName ?? device?.manageDepName ?? "").toString().trim();
+      const projectName = (override.projectName ?? form.projectName ?? device?.projectName ?? "").toString().trim();
+      if (!department) {
+        errors[id] = { ...(errors[id] || {}), department: true };
+      }
+      if (!projectName) {
+        errors[id] = { ...(errors[id] || {}), project: true };
+      }
+    });
+    if (Object.keys(errors).length > 0) {
+      setDeviceValidation(errors);
+      const missing = Object.entries(errors).map(([id, e]) => {
+        const parts = [];
+        if (e.project) parts.push("프로젝트");
+        if (e.department) parts.push("부서");
+        return `${id}(${parts.join(",")})`;
+      });
+      alert(`다음 장비에 필수 항목이 누락되었습니다: ${missing.join(", ")}`);
+      setError("필수 항목을 입력해 주세요.");
+      return false;
+    }
+    setDeviceValidation({});
+    return true;
   };
 
   const applyOverrideToAll = (deviceId) => {
@@ -404,6 +505,8 @@ export default function DeviceApplication() {
       });
       return next;
     });
+    // Clear per-device validation after applying overrides to all
+    setDeviceValidation({});
   };
 
   const filterProjectsByTerm = (term) => {
@@ -469,6 +572,9 @@ export default function DeviceApplication() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
+    if (!validateDevices()) {
+      return;
+    }
 
     if (!form.reason.trim()) {
       alert("신청 사유를 입력해 주세요.");
@@ -822,6 +928,9 @@ export default function DeviceApplication() {
                                   )}
                                 </div>
                               </div>
+                              {deviceValidation[id]?.project && (
+                                <div className="field-error">프로젝트는 필수입니다</div>
+                              )}
                             </div>
                           </td>
                           <td>
@@ -836,6 +945,9 @@ export default function DeviceApplication() {
                                 </option>
                               ))}
                             </select>
+                            {deviceValidation[id]?.department && (
+                              <div className="field-error">부서는 필수입니다</div>
+                            )}
                           </td>
                           <td>
                             <div className="device-overrides-user">
@@ -865,9 +977,9 @@ export default function DeviceApplication() {
                           </td>
                           <td>
                             <div className="device-overrides-current">
-                              <span>프로젝트: {deviceDetail?.projectName ?? "-"}</span>
-                              <span>부서: {deviceDetail?.manageDepName ?? "-"}</span>
-                              <span>실사용자: {deviceDetail?.realUser ?? "-"}</span>
+                              <span>프로젝트: {override?.projectName ?? deviceDetail?.projectName ?? "-"}</span>
+                              <span>부서: {override?.departmentName ?? deviceDetail?.manageDepName ?? "-"}</span>
+                              <span>실사용자: {override?.realUser ?? deviceDetail?.realUser ?? "-"}</span>
                             </div>
                           </td>
                           <td>

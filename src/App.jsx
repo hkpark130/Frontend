@@ -42,6 +42,8 @@ export default function App() {
               <Route path="/device/list" element={<DeviceList />} />
               <Route path="/device/apply" element={<DeviceApplication />} />
               <Route path="/device/:deviceId/apply" element={<DeviceApplication />} />
+              <Route path="/mypage/my-assets/return" element={<DeviceReturnRequest />} />
+              <Route path="/mypage/my-assets/disposal" element={<DeviceDisposalRequest />} />
               <Route path="/mypage/my-assets/:deviceId/return" element={<DeviceReturnRequest />} />
               <Route path="/mypage/my-assets/:deviceId/disposal" element={<DeviceDisposalRequest />} />
               {/* 관리자 메뉴 */}

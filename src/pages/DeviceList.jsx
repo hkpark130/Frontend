@@ -5,6 +5,14 @@ import Pagination from '@/components/Pagination';
 import { fetchAvailableDevices } from "@/api/devices";
 import SearchIcon from '@/components/icons/SearchIcon';
 
+const RETURN_PENDING_STATUSES = new Set([
+  "승인대기",
+  "진행중",
+  "1차승인완료",
+  "2차승인완료",
+  "승인완료",
+]);
+
 const columns = [
   { key: "categoryName", label: "품목" },
   { key: "id", label: "관리번호" },
@@ -203,9 +211,19 @@ export default function DeviceList() {
     navigate(`/device/apply?${query}`, { state: { deviceIds: uniqueIds } });
   };
 
-  const isReturnPending = (device) =>
-    device.approvalType === "반납" &&
-    (device.approvalInfo === "승인대기" || device.approvalInfo === "1차승인완료");
+  const isReturnPending = (device) => {
+    if (device.approvalType !== "반납") {
+      return false;
+    }
+    const normalized = typeof device.approvalInfo === "string"
+      ? device.approvalInfo.trim()
+      : "";
+    if (!normalized) {
+      return false;
+    }
+    const canonical = normalized.replace(/\s+/g, "");
+    return RETURN_PENDING_STATUSES.has(canonical) || RETURN_PENDING_STATUSES.has(normalized);
+  };
 
   const formatDeadline = (iso) => {
     if (!iso) return "미정";
