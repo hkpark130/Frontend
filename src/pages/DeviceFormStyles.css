@@ -22,6 +22,20 @@
   box-sizing: border-box;
 }
 
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-with-action > *:first-child {
+  flex: 1 1 auto;
+}
+
+.input-with-action .small-button {
+  white-space: nowrap;
+}
+
 .device-info-label input,
 .device-info-label select {
   margin-top: 4px;
@@ -303,6 +317,105 @@
   margin-right: 8px;
 }
 
+.device-overrides-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrapper--device-overrides {
+  overflow: visible;
+}
+
+.table-wrapper--device-overrides .table-wrapper__scroll {
+  position: relative;
+  overflow-x: auto;
+}
+
+.table-wrapper--device-overrides .table-wrapper__scroll table {
+  min-width: 100%;
+}
+
+.table-wrapper--device-overrides .combobox-panel {
+  z-index: 120;
+}
+
+.device-overrides-table th,
+.device-overrides-table td {
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  vertical-align: top;
+  text-align: left;
+  background: #fff;
+}
+
+.device-overrides-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #111827;
+}
+
+.device-overrides-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.device-overrides-project {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.device-overrides-project .combobox-wrapper {
+  width: 100%;
+}
+
+.device-overrides-project .combobox-trigger {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.device-overrides-project .combobox-trigger span:first-child {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.device-overrides-user {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.device-overrides-user select,
+.device-overrides-user input,
+.device-overrides-table select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.device-overrides-user input:disabled {
+  background: #f3f4f6;
+  color: #94a3b8;
+}
+
+.device-overrides-current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.device-overrides-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
 @media (max-width: 900px) {
   .device-info-grid,
   .approver-grid {
@@ -333,5 +446,18 @@
   .tag-add-button {
     width: 100%;
     justify-content: center;
+  }
+
+  .device-overrides-table {
+    font-size: 13px;
+  }
+
+  .device-overrides-user {
+    flex-direction: column;
+  }
+
+  .device-overrides-table th,
+  .device-overrides-table td {
+    padding: 8px 10px;
   }
 }

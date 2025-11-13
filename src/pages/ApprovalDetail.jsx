@@ -11,7 +11,7 @@ import {
   updateApprovalApplication,
 } from "@/api/approvals";
 import { useUser } from "@/context/UserProvider";
-import { fetchDepartments, fetchProjects } from "@/api/devices";
+import { fetchDepartments, fetchProjects, fetchDeviceDetail } from "@/api/devices";
 import { fetchTags } from "@/api/tags";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -194,6 +194,9 @@ export default function ApprovalDetail() {
   const [tagInput, setTagInput] = useState("");
   const [isTagLoading, setIsTagLoading] = useState(false);
   const [tagFetchError, setTagFetchError] = useState(null);
+  const [associatedDevices, setAssociatedDevices] = useState([]);
+  const [isAssociatedDevicesLoading, setIsAssociatedDevicesLoading] = useState(false);
+  const [associatedDevicesError, setAssociatedDevicesError] = useState(null);
   const [isActionProcessing, setIsActionProcessing] = useState(false);
 
   const normalizedUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
@@ -434,11 +437,89 @@ export default function ApprovalDetail() {
 
     const initialTags = useMemo(() => dedupeTagNames(approval?.tags ?? []), [approval]);
 
+    const approvalDeviceIds = useMemo(() => {
+      if (!approval || !Array.isArray(approval.deviceIds)) {
+        return [];
+      }
+      const normalized = approval.deviceIds
+        .map((value) => {
+          if (value == null) {
+            return "";
+          }
+          const text = String(value).trim();
+          return text;
+        })
+        .filter((value) => value.length > 0);
+      return Array.from(new Set(normalized));
+    }, [approval]);
+
     useEffect(() => {
       setSelectedTags(initialTags);
       setTagOptions((prev) => mergeTagOptions(prev, initialTags));
       setTagInput("");
     }, [initialTags]);
+
+    useEffect(() => {
+      let cancelled = false;
+      const ids = approvalDeviceIds;
+      if (!ids || ids.length === 0) {
+        setAssociatedDevices([]);
+        setAssociatedDevicesError(null);
+        setIsAssociatedDevicesLoading(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+
+      const loadAssociatedDevices = async () => {
+        setIsAssociatedDevicesLoading(true);
+        setAssociatedDevicesError(null);
+        try {
+          const results = await Promise.allSettled(
+            ids.map((deviceId) => fetchDeviceDetail(deviceId)),
+          );
+          if (cancelled) {
+            return;
+          }
+          const nextDevices = [];
+          const failures = [];
+          results.forEach((result, index) => {
+            const targetId = ids[index];
+            if (result.status === "fulfilled" && result.value) {
+              const detail = result.value;
+              nextDevices.push({
+                ...detail,
+                id: detail?.id ?? targetId,
+              });
+            } else {
+              failures.push(targetId);
+            }
+          });
+          setAssociatedDevices(nextDevices);
+          if (failures.length > 0) {
+            setAssociatedDevicesError(`일부 장비 정보를 불러오지 못했습니다: ${failures.join(", ")}`);
+          } else {
+            setAssociatedDevicesError(null);
+          }
+        } catch (err) {
+          console.error(err);
+          if (!cancelled) {
+            setAssociatedDevices([]);
+            setAssociatedDevicesError("선택된 장비 정보를 불러오는 중 문제가 발생했습니다.");
+          }
+        } finally {
+          if (!cancelled) {
+            setIsAssociatedDevicesLoading(false);
+          }
+        }
+      };
+
+      loadAssociatedDevices();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [approvalDeviceIds]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1228,28 +1309,58 @@ export default function ApprovalDetail() {
 
         <div className="detail-section">
           <h3>장비 정보</h3>
-          <dl>
-            <div>
-              <dt>장비 ID</dt>
-              <dd>{approval.deviceId ?? "-"}</dd>
+          {isAssociatedDevicesLoading && <p className="muted">선택된 장비 정보를 불러오는 중입니다...</p>}
+          {associatedDevicesError && <p className="error">{associatedDevicesError}</p>}
+          {associatedDevices.length > 0 ? (
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>관리번호</th>
+                    <th>품목</th>
+                    <th>용도</th>
+                    <th>상태</th>
+                    <th>프로젝트</th>
+                    <th>관리부서</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {associatedDevices.map((device, index) => {
+                    const targetId = device?.id ?? approvalDeviceIds[index] ?? String(index);
+                    return (
+                      <tr key={targetId}>
+                        <td>{device?.id ?? approvalDeviceIds[index] ?? "-"}</td>
+                        <td>{device?.categoryName ?? "-"}</td>
+                        <td>{device?.purpose ?? "-"}</td>
+                        <td>{device?.status ?? "-"}</td>
+                        <td>{approval.tmpProjectName ?? device?.projectName ?? "-"}</td>
+                        <td>{approval.tmpDepartmentName ?? device?.manageDepName ?? "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <dt>품목</dt>
-              <dd>{approval.categoryName ?? "-"}</dd>
+          ) : approvalDeviceIds.length > 0 ? (
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>관리번호</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {approvalDeviceIds.map((deviceId) => (
+                    <tr key={deviceId}>
+                      <td>{deviceId}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <dt>상태</dt>
-              <dd>{approval.deviceStatus ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>프로젝트</dt>
-              <dd>{approval.tmpProjectName ?? approval.projectName ?? "-"}</dd>
-            </div>
-            <div>
-              <dt>부서</dt>
-              <dd>{approval.tmpDepartmentName ?? "-"}</dd>
-            </div>
-          </dl>
+          ) : (
+            <p className="muted">연결된 장비 정보가 없습니다.</p>
+          )}
         </div>
 
         <div className="detail-section">

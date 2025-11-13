@@ -40,6 +40,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               {/* 가용장비 리스트 */}
               <Route path="/device/list" element={<DeviceList />} />
+              <Route path="/device/apply" element={<DeviceApplication />} />
               <Route path="/device/:deviceId/apply" element={<DeviceApplication />} />
               <Route path="/mypage/my-assets/:deviceId/return" element={<DeviceReturnRequest />} />
               <Route path="/mypage/my-assets/:deviceId/disposal" element={<DeviceDisposalRequest />} />

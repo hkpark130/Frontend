@@ -316,6 +316,7 @@ button.outline:disabled {
 }
 
 .table-wrapper {
+  position: relative;
   overflow-x: auto;
 }
 
@@ -482,14 +483,27 @@ tr:hover {
 }
 
 .applicant-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px; /* widen space between left/right fields */
+  grid-template-columns: minmax(160px, 0.2fr) minmax(280px, 0.5fr) minmax(200px, 0.3fr);
+  gap: 24px;
+  align-items: end;
 }
 
 .applicant-column {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.applicant-column--user,
+.applicant-column--usage,
+.applicant-column--deadline {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .applicant-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .applicant-column label,
