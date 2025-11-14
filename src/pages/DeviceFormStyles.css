@@ -56,7 +56,7 @@
 }
 
 .applicant-column--compact {
-  margin-bottom: 6px;
+  margin-bottom: 1px;
 }
 
 .applicant-column--stacked {
@@ -78,6 +78,14 @@
   grid-template-columns: minmax(60px, 15%) 1fr;
   gap: 12px 24px;
   align-items: flex-start;
+}
+
+.status-grid--return {
+  grid-template-columns: 1fr;
+}
+
+.status-grid--return .stretch {
+  grid-column: 1 / -1;
 }
 
 .status-radio-group {
@@ -102,6 +110,16 @@
 .status-radio-input {
   width: 20px;
   height: 20px;
+}
+
+.status-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 0.95rem;
+  color: #111827;
 }
 
 .approver-grid {
@@ -178,7 +196,7 @@
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   border-radius: 9999px;
   border: 1px solid transparent;
   background: #e5e7eb;
@@ -320,10 +338,14 @@
 .device-overrides-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   border-radius: 12px;
   overflow: hidden;
   font-size: 13px;
+}
+
+.device-overrides-table.device-action-table {
+  table-layout: fixed;
 }
 
 .table-wrapper--device-overrides {
@@ -363,34 +385,52 @@
   color: #111827;
 }
 
-.device-overrides-table th:nth-child(1),
-.device-overrides-table td:nth-child(1) {
-  width: 170px;
+.device-overrides-table.device-action-table th:nth-child(1),
+.device-overrides-table.device-action-table td:nth-child(1) {
+  width: 8%;
 }
 
-.device-overrides-table th:nth-child(2),
-.device-overrides-table td:nth-child(2) {
-  width: 220px;
+.device-overrides-table.device-action-table th:nth-child(2),
+.device-overrides-table.device-action-table td:nth-child(2) {
+  width: 22%;
 }
 
-.device-overrides-table th:nth-child(3),
-.device-overrides-table td:nth-child(3) {
-  width: 170px;
+.device-overrides-table.device-action-table th:nth-child(3),
+.device-overrides-table.device-action-table td:nth-child(3) {
+  width: 8%;
 }
 
-.device-overrides-table th:nth-child(4),
-.device-overrides-table td:nth-child(4) {
-  width: 210px;
+.device-overrides-table.device-action-table th:nth-child(4),
+.device-overrides-table.device-action-table td:nth-child(4) {
+  width: 56%;
 }
 
-.device-overrides-table th:nth-child(5),
-.device-overrides-table td:nth-child(5) {
-  width: 220px;
+.device-overrides-table.device-action-table th:nth-child(5),
+.device-overrides-table.device-action-table td:nth-child(5) {
+  width: 7%;
 }
 
-.device-overrides-table th:nth-child(6),
-.device-overrides-table td:nth-child(6) {
+/* When editing a 반납 (return) we show fewer columns: 관리번호 / 반납 상태 / 장비 태그 / 현재 정보
+   Use a modifier class on the table `.return-editing` to override widths for that layout. */
+.device-overrides-table.return-editing th:nth-child(1),
+.device-overrides-table.return-editing td:nth-child(1) {
+  /* 관리번호 */
+  width: 100px;
+}
+.device-overrides-table.return-editing th:nth-child(2),
+.device-overrides-table.return-editing td:nth-child(2) {
+  /* 반납 상태 */
   width: 120px;
+}
+.device-overrides-table.return-editing th:nth-child(3),
+.device-overrides-table.return-editing td:nth-child(3) {
+  /* 장비 태그 (가변 넓게) */
+  width: 420px;
+}
+.device-overrides-table.return-editing th:nth-child(4),
+.device-overrides-table.return-editing td:nth-child(4) {
+  /* 현재 정보 */
+  width: 220px;
 }
 
 .device-overrides-meta {
@@ -477,6 +517,19 @@
   color: #1f2937;
 }
 
+.device-tag-view {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.device-tag-view > span:first-child {
+  font-weight: 600;
+  color: #111827;
+}
+
 .device-overrides-current-sub {
   display: block;
   font-size: 12px;
@@ -546,5 +599,65 @@
   .device-overrides-table th,
   .device-overrides-table td {
     padding: 8px 10px;
+  }
+}
+
+/* Applicant form layout: 신청사유(넓게) + 사이드 필드(usage/deadline) 고정 너비 */
+.form-section-grid.applicant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 사유 textarea (왼쪽 칸) */
+.applicant-grid__reason textarea {
+  width: 100%;
+  box-sizing: border-box; /* 패딩/보더 포함해서 계산 */
+  min-height: 160px;      /* 원하는 초기 높이 */
+  max-height: 420px;      /* 너무 길어지면 스크롤 */
+  resize: vertical;       /* 세로로 늘리는 것만 허용 */
+  overflow: auto;
+  padding: 10px;
+  font-size: 14px;
+}
+
+/* 기간 / 마감일 필드(오른쪽) 구성 항목 간격 안정화 */
+.applicant-field {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* 사용기간 (콤포넌트) */
+.applicant-field.applicant-field--range {
+  min-width: 0;           /* 그리드에서 overflow 방지(특히 flex에서 중요) */
+  width: 100%;
+}
+
+/* 신청 마감일 칸 너비 고정 (오른쪽 패널 안에서) */
+.applicant-field.applicant-field--deadline {
+  width: 90%;
+  min-width: 100px;
+  max-width: 340px;
+  margin-top: -5px;
+}
+
+/* 태그 편집(반납) 블록이 가로로 나가면 줄바꿈 방지/스페이싱 조절 */
+.tag-edit-wrapper {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+}
+
+/* 작은 화면 대응: 한 열로 쌓기 */
+@media (max-width: 900px) {
+  .form-section-grid.applicant-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .applicant-grid__reason textarea {
+    min-height: 120px;
   }
 }

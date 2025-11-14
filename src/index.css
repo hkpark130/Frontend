@@ -320,6 +320,15 @@ button.outline:disabled {
   overflow-x: auto;
 }
 
+.selection-radio {
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.selection-radio:disabled {
+  accent-color: #9ca3af;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -550,6 +559,15 @@ tr:hover {
 .applicant-column label,
 .applicant-column .range-field {
   width: 100%;
+  gap: 8px; 
+}
+
+.applicant-grid--return .applicant-column .range-field {
+  gap: 0;
+}
+
+.applicant-grid--disposal .applicant-column .range-field {
+  gap: 0px;
 }
 
 
@@ -795,7 +813,7 @@ textarea {
 .range-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0px;
 }
 
 .range-field.mui .MuiTextField-root {

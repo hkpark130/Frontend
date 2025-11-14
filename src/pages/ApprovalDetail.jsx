@@ -172,8 +172,11 @@ const removeTag = (collection = [], candidate) =>
 const mergeTagOptions = (base = [], additions = []) =>
   dedupeTagNames([...(base ?? []), ...(additions ?? [])]);
 
-const DEFAULT_RETURN_STATUS_OPTIONS = ["반납예정", "반납완료", "점검필요", "파손"];
+const DEFAULT_RETURN_STATUS_OPTIONS = ["정상", "노후"];
 const DEFAULT_RETURN_TAG_SUGGESTIONS = ["정상", "점검필요", "부속품확인", "데이터삭제", "파손"];
+const DEFAULT_METADATA_PROJECT = "본사";
+const DEFAULT_METADATA_DEPARTMENT = "경영지원부";
+const DEFAULT_METADATA_REAL_USER = "-";
 
 export default function ApprovalDetail() {
   const { approvalId } = useParams();
@@ -186,7 +189,7 @@ export default function ApprovalDetail() {
   const [comments, setComments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [actionUsername, setActionUsername] = useState(defaultUsername);
+  const actionUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
   const [actionComment, setActionComment] = useState("");
   const [commentText, setCommentText] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
@@ -199,9 +202,6 @@ export default function ApprovalDetail() {
   const [projects, setProjects] = useState([]);
   const [metadataError, setMetadataError] = useState(null);
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
-  const [projectSearchTerm, setProjectSearchTerm] = useState("");
-  const projectComboRef = useRef(null);
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [tagInput, setTagInput] = useState("");
@@ -216,7 +216,6 @@ export default function ApprovalDetail() {
   const projectDropdownRefs = useRef(new Map());
 
   const normalizedUsername = useMemo(() => (defaultUsername ?? "").trim(), [defaultUsername]);
-  const normalizedDisplayName = useMemo(() => (user?.profile?.name ?? "").trim(), [user]);
   const currentUserExternalId = useMemo(() => {
     const candidate = user?.profile?.sub || user?.profile?.id;
     return typeof candidate === "string" ? candidate.trim() : "";
@@ -252,6 +251,7 @@ export default function ApprovalDetail() {
   );
 
   const isReturnRequest = approval?.type === "반납";
+  const isDisposalRequest = approval?.type === "폐기";
   const isReturnEditing = isReturnRequest && isEditing;
 
   const initialTags = useMemo(
@@ -1561,13 +1561,15 @@ export default function ApprovalDetail() {
                     placeholder="신청 사유를 입력해 주세요."
                   />
                 </label>
-                <div className="applicant-field applicant-field--range">
-                  <RangeDateInput
-                    startDate={editForm.usageStartDate}
-                    endDate={editForm.usageEndDate}
-                    onChange={handleUsagePeriodEdit}
-                  />
-                </div>
+                {!isReturnRequest && !isDisposalRequest && (
+                  <div className="applicant-field applicant-field--range">
+                    <RangeDateInput
+                      startDate={editForm.usageStartDate}
+                      endDate={editForm.usageEndDate}
+                      onChange={handleUsagePeriodEdit}
+                    />
+                  </div>
+                )}
                 <div className="applicant-field applicant-field--deadline">
                   <DeadlineDateField
                     value={editForm.deadlineDate}
@@ -1684,14 +1686,18 @@ export default function ApprovalDetail() {
                 <dt>신청일</dt>
                 <dd>{formatDateTime(approval.createdDate)}</dd>
               </div>
-              <div>
-                <dt>사용 시작일</dt>
-                <dd>{formatDateOnly(approval.usageStartDate)}</dd>
-              </div>
-              <div>
-                <dt>사용 종료일</dt>
-                <dd>{formatDateOnly(approval.usageEndDate)}</dd>
-              </div>
+              {!isReturnRequest && !isDisposalRequest && (
+                <>
+                  <div>
+                    <dt>사용 시작일</dt>
+                    <dd>{formatDateOnly(approval.usageStartDate)}</dd>
+                  </div>
+                  <div>
+                    <dt>사용 종료일</dt>
+                    <dd>{formatDateOnly(approval.usageEndDate)}</dd>
+                  </div>
+                </>
+              )}
               <div>
                 <dt>신청 마감일</dt>
                 <dd>{formatDateOnly(approval.deadline)}</dd>
@@ -1704,103 +1710,60 @@ export default function ApprovalDetail() {
                   </pre>
                 </dd>
               </div>
-              {approval.type === "반납" && (
-                <div>
-                  <dt>태그</dt>
-                  <dd>
-                    {initialTags.length > 0 ? (
-                      <div className="tag-view-list">
-                        {initialTags.map((tag) => (
-                          <span key={tagKey(tag)} className="tag-pill">{tag}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </dd>
-                </div>
-              )}
             </dl>
           )}
         </div>
 
         <div className="detail-section detail-section--devices">
           <h3>장비 정보</h3>
-          {isEditing && editForm && (
-            <section className="form-section form-section--device-overrides">
-              <div className="form-section-header">
-                <h4>장비별 설정</h4>
-                <p className="muted">
-                  {isReturnEditing
-                    ? "반납 신청 장비마다 반납 상태와 태그를 조정할 수 있습니다."
-                    : "각 장비마다 프로젝트, 관리부서, 실제 사용자 정보를 개별로 조정할 수 있습니다."}
-                </p>
-              </div>
-              <div className="table-wrapper table-wrapper--device-overrides">
-                <div className="table-wrapper__scroll">
-                  <table className="device-overrides-table">
-                    <thead>
-                      <tr>
-                        <th>관리번호</th>
-                        <th>요청 프로젝트</th>
-                        <th>요청 부서</th>
-                        <th>실제 사용자</th>
-                        <th>현재 정보</th>
-                        <th>작업</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleOverrideIds.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="muted">
-                            조정할 장비 정보가 없습니다.
-                          </td>
-                        </tr>
+          
+          {isEditing && editForm && !isDisposalRequest && (
+            <>
+             <p className="muted">
+              {isReturnEditing
+                ? "반납 신청 장비마다 반납 상태와 태그를 조정할 수 있습니다."
+                : "각 장비마다 프로젝트, 관리부서, 실제 사용자 정보를 개별로 조정할 수 있습니다."}
+            </p>
+            <div className="table-wrapper table-wrapper--device-overrides">
+              <div className="table-wrapper__scroll">
+                <table className={`device-overrides-table ${isReturnEditing ? 'return-editing' : ''}`}>
+                  <thead>
+                    <tr>
+                      <th>관리번호</th>
+                      {isReturnEditing ? (
+                        <>
+                          <th>반납 상태</th>
+                          <th>장비 태그</th>
+                          <th>현재 정보</th>
+                        </>
                       ) : (
-                        visibleOverrideIds.map((id, index) => {
-                          const key = String(id);
-                          const override = deviceOverrides[key] ?? { deviceId: key };
-                          const row = deviceRowMap.get(key) || deviceRows[index] || {};
-                          const mode = (override.realUserMode ?? "auto").toLowerCase() === "manual" ? "manual" : "auto";
-                          const manualDisabled = mode !== "manual";
-                          const isOpen = projectDropdownState.deviceId === key;
-                          const projectSearchValue = isOpen ? projectDropdownState.search : "";
-                          const projectOptions = isOpen ? filterProjectsByTerm(projectSearchValue) : [];
-
-                          const fallbackRequestedProject = row.requestedProjectName && row.requestedProjectName !== "-"
-                            ? row.requestedProjectName
-                            : "";
-                          const fallbackCurrentProject = row.currentProjectName && row.currentProjectName !== "-"
-                            ? row.currentProjectName
-                            : "";
-                          const selectedProjectName = (override.projectName ?? fallbackRequestedProject ?? "").trim();
-                          const selectedProjectCode = (override.projectCode ?? "").trim();
-                          const projectTriggerLabel = selectedProjectName || selectedProjectCode
-                            ? [selectedProjectName, selectedProjectCode && `(${selectedProjectCode})`].filter(Boolean).join(" ")
-                            : "프로젝트를 선택하세요";
-                          const displayProject = selectedProjectName || selectedProjectCode
-                            ? [selectedProjectName || selectedProjectCode, selectedProjectName && selectedProjectCode ? `(${selectedProjectCode})` : ""].filter(Boolean).join(" ")
-                            : fallbackRequestedProject || fallbackCurrentProject || "-";
-
-                          const fallbackRequestedDepartment = row.requestedDepartmentName && row.requestedDepartmentName !== "-"
-                            ? row.requestedDepartmentName
-                            : "";
-                          const fallbackCurrentDepartment = row.currentDepartmentName && row.currentDepartmentName !== "-"
-                            ? row.currentDepartmentName
-                            : "";
-                          const selectedDepartmentName = (override.departmentName ?? fallbackRequestedDepartment ?? "").trim();
-                          const displayDepartment = selectedDepartmentName || fallbackCurrentDepartment || "-";
-
-                          const fallbackRequestedUser = row.requestedRealUser && row.requestedRealUser !== "-"
-                            ? row.requestedRealUser
-                            : "";
-                          const fallbackCurrentUser = row.currentRealUser && row.currentRealUser !== "-"
-                            ? row.currentRealUser
-                            : "";
-                          const displayRealUser = mode === "manual"
-                            ? (override.realUser ?? "").trim() || "-"
-                            : fallbackRequestedUser || fallbackCurrentUser || "-";
-                          
+                        <>
+                          <th>요청 프로젝트</th>
+                          <th>요청 부서</th>
+                          <th>실제 사용자</th>
+                          <th>현재 정보</th>
+                          <th>작업</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleOverrideIds.length === 0 ? (
+                      <tr>
+                        <td colSpan={isReturnEditing ? 4 : 6} className="muted">
+                          조정할 장비 정보가 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleOverrideIds.map((id, index) => {
+                        const key = String(id);
+                        const override = deviceOverrides[key] ?? { deviceId: key };
+                        const row = deviceRowMap.get(key) || deviceRows[index] || {};
+                        if (isReturnEditing) {
+                          const statusValue = typeof override.status === "string" ? override.status.trim() : "";
+                          const deviceTags = Array.isArray(override.tags) ? override.tags : [];
+                          const tagInputValue = typeof override.tagInput === "string" ? override.tagInput : "";
+                          const currentStatus = row.status ?? row.currentStatus ?? "-";
 
                           return (
                             <tr key={key}>
@@ -1810,215 +1773,411 @@ export default function ApprovalDetail() {
                                   {row.categoryName && row.categoryName !== "-" && (
                                     <span>{row.categoryName}</span>
                                   )}
-                                  {row.status && row.status !== "-" && (
-                                    <span className="muted">{row.status}</span>
+                                  {currentStatus && currentStatus !== "-" && (
+                                    <span className="muted">현재 상태: {currentStatus}</span>
                                   )}
                                 </div>
                               </td>
                               <td>
-                                <div
-                                  className="device-overrides-project"
-                                  ref={(element) => {
-                                    if (element) {
-                                      projectDropdownRefs.current.set(key, element);
-                                    } else {
-                                      projectDropdownRefs.current.delete(key);
-                                    }
-                                  }}
-                                >
-                                  <div className={`combobox${isOpen ? " open" : ""}`}>
-                                    <button
-                                      type="button"
-                                      className="combobox-trigger"
-                                      onClick={() => toggleDeviceProjectDropdown(key)}
-                                    >
-                                      <span>{projectTriggerLabel}</span>
-                                      <span className="combobox-caret" aria-hidden="true">▾</span>
-                                    </button>
-                                    {isOpen && (
-                                      <div className="combobox-panel combobox-panel--stretch">
-                                        <input
-                                          type="text"
-                                          className="combobox-search combobox-search--full"
-                                          placeholder="프로젝트 이름 또는 코드를 검색하세요"
-                                          value={projectSearchValue}
-                                          onChange={(event) => updateProjectSearchTerm(event.target.value)}
-                                        />
-                                        <ul className="combobox-options combobox-options--scroll">
-                                          <li
-                                            className="combobox-option"
-                                            onClick={() => handleDeviceProjectClear(key)}
-                                          >
-                                            선택 해제
-                                          </li>
-                                          {projectOptions.length === 0 ? (
-                                            <li className="combobox-option" aria-disabled>
-                                              검색 결과가 없습니다.
-                                            </li>
-                                          ) : (
-                                            projectOptions.map((project) => (
-                                              <li
-                                                key={project.code ?? project.id ?? project.name}
-                                                className="combobox-option"
-                                                onClick={() => handleDeviceProjectSelect(key, project)}
-                                              >
-                                                <span className="combobox-option-label">{project.name}</span>
-                                                <span className="combobox-option-description">{project.code || "코드 없음"}</span>
-                                              </li>
-                                            ))
-                                          )}
-                                        </ul>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
                                 <select
-                                  value={selectedDepartmentName}
-                                  onChange={(event) => {
-                                    const nextName = event.target.value;
-                                    const matched = departments.find((department) => department.name === nextName || department.code === nextName);
-                                    updateDeviceOverride(key, {
-                                      departmentName: nextName,
-                                      departmentCode: matched?.code ?? "",
-                                    });
-                                  }}
+                                  value={statusValue}
+                                  onChange={(event) => handleReturnDeviceStatusChange(key, event.target.value)}
                                 >
-                                  <option value="">선택하세요</option>
-                                  {departments.map((department) => (
-                                    <option key={department.id ?? department.code ?? department.name} value={department.name}>
-                                      {department.name}
+                                  {returnStatusOptions.map((option) => (
+                                    <option key={`${key}-status-${option}`} value={option}>
+                                      {option}
                                     </option>
                                   ))}
                                 </select>
                               </td>
                               <td>
-                                <div className="device-overrides-user">
-                                  <select
-                                    value={mode}
-                                    onChange={(event) => {
-                                      const nextMode = event.target.value;
-                                      updateDeviceOverride(key, {
-                                        realUserMode: nextMode,
-                                        realUser: nextMode === "manual"
-                                          ? override.realUser ?? fallbackRequestedUser ?? ""
-                                          : "",
-                                      });
-                                    }}
-                                  >
-                                    <option value="auto">자동</option>
-                                    <option value="manual">직접 입력</option>
-                                  </select>
-                                  <input
-                                    type="text"
-                                    value={override.realUser ?? ""}
-                                    onChange={(event) => updateDeviceOverride(key, { realUser: event.target.value })}
-                                    placeholder={mode === "manual" ? "실제 사용자 이름" : "자동 지정"}
-                                    disabled={manualDisabled}
-                                  />
+                                <div className="device-return-tags">
+                                  <div className="tag-input-row">
+                                    <input
+                                      type="text"
+                                      value={tagInputValue}
+                                      onChange={(event) => handleReturnDeviceTagInputChange(key, event.target.value)}
+                                      onKeyDown={handleReturnDeviceTagInputKeyDown(key)}
+                                      placeholder="태그 입력 후 Enter 또는 추가 버튼"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="outline tag-add-button"
+                                      onClick={() => handleReturnDeviceTagSubmit(key)}
+                                      disabled={!normalizeTagName(tagInputValue)}
+                                    >
+                                      태그 추가
+                                    </button>
+                                  </div>
+                                  <div className="tag-view-list">
+                                    {deviceTags.length === 0 ? (
+                                      <span className="tag-status muted">선택된 태그가 없습니다.</span>
+                                    ) : (
+                                      deviceTags.map((tag) => {
+                                        const normalizedTag = normalizeTagName(tag);
+                                        if (!normalizedTag) {
+                                          return null;
+                                        }
+                                        return (
+                                          <div key={`${key}-selected-${tagKey(normalizedTag)}`} className="tag-chip selected">
+                                            <span className="tag-label">{normalizedTag}</span>
+                                            <button
+                                              type="button"
+                                              className="remove-btn"
+                                              onClick={(ev) => {
+                                                ev.stopPropagation();
+                                                removeReturnDeviceTag(key, normalizedTag);
+                                              }}
+                                              aria-label={`태그 ${normalizedTag} 제거`}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                  {tagOptions.length > 0 && (
+                                    <div className="tag-options" style={{ marginTop: "4px" }}>
+                                      {tagOptions.map((option) => {
+                                        const normalizedOption = normalizeTagName(option);
+                                        if (!normalizedOption) {
+                                          return null;
+                                        }
+                                        const selected = hasTag(deviceTags, normalizedOption);
+                                        return (
+                                          <div
+                                            key={`${key}-option-${tagKey(normalizedOption)}`}
+                                            className={`tag-chip${selected ? " selected" : ""}`}
+                                            onClick={() => toggleReturnDeviceTagSelection(key, normalizedOption)}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={selected}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                toggleReturnDeviceTagSelection(key, normalizedOption);
+                                              }
+                                            }}
+                                          >
+                                            <span className="tag-label">{normalizedOption}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                               <td>
                                 <div className="device-overrides-current">
                                   <div>
                                     <span className="device-overrides-current-label">프로젝트</span>
-                                    <span className="device-overrides-current-value">{displayProject}</span>
+                                    <span className="device-overrides-current-value">{row.currentProjectName ?? "-"}</span>
                                   </div>
                                   <div>
                                     <span className="device-overrides-current-label">부서</span>
-                                    <span className="device-overrides-current-value">{displayDepartment}</span>
+                                    <span className="device-overrides-current-value">{row.currentDepartmentName ?? "-"}</span>
                                   </div>
                                   <div>
                                     <span className="device-overrides-current-label">실제 사용자</span>
-                                    <span className="device-overrides-current-value">{displayRealUser}</span>
+                                    <span className="device-overrides-current-value">{row.currentRealUser ?? "-"}</span>
                                   </div>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="device-overrides-actions">
-                                  <button
-                                    type="button"
-                                    className="outline small-button"
-                                    onClick={() => applyOverrideToAll(key)}
-                                  >
-                                    전체 적용
-                                  </button>
                                 </div>
                               </td>
                             </tr>
                           );
-                        })
-                      )}
+                        }
+                        const mode = (override.realUserMode ?? "auto").toLowerCase() === "manual" ? "manual" : "auto";
+                        const manualDisabled = mode !== "manual";
+                        const isOpen = projectDropdownState.deviceId === key;
+                        const projectSearchValue = isOpen ? projectDropdownState.search : "";
+                        const projectOptions = isOpen ? filterProjectsByTerm(projectSearchValue) : [];
+
+                        const fallbackRequestedProject = row.requestedProjectName && row.requestedProjectName !== "-"
+                          ? row.requestedProjectName
+                          : "";
+                        const fallbackCurrentProject = row.currentProjectName && row.currentProjectName !== "-"
+                          ? row.currentProjectName
+                          : "";
+                        const selectedProjectName = (override.projectName ?? fallbackRequestedProject ?? "").trim();
+                        const selectedProjectCode = (override.projectCode ?? "").trim();
+                        const projectTriggerLabel = selectedProjectName || selectedProjectCode
+                          ? [selectedProjectName, selectedProjectCode && `(${selectedProjectCode})`].filter(Boolean).join(" ")
+                          : "프로젝트를 선택하세요";
+                        const displayProject = selectedProjectName || selectedProjectCode
+                          ? [selectedProjectName || selectedProjectCode, selectedProjectName && selectedProjectCode ? `(${selectedProjectCode})` : ""].filter(Boolean).join(" ")
+                          : fallbackRequestedProject || fallbackCurrentProject || "-";
+
+                        const fallbackRequestedDepartment = row.requestedDepartmentName && row.requestedDepartmentName !== "-"
+                          ? row.requestedDepartmentName
+                          : "";
+                        const fallbackCurrentDepartment = row.currentDepartmentName && row.currentDepartmentName !== "-"
+                          ? row.currentDepartmentName
+                          : "";
+                        const selectedDepartmentName = (override.departmentName ?? fallbackRequestedDepartment ?? "").trim();
+                        const displayDepartment = selectedDepartmentName || fallbackCurrentDepartment || "-";
+
+                        const fallbackRequestedUser = row.requestedRealUser && row.requestedRealUser !== "-"
+                          ? row.requestedRealUser
+                          : "";
+                        const fallbackCurrentUser = row.currentRealUser && row.currentRealUser !== "-"
+                          ? row.currentRealUser
+                          : "";
+                        const displayRealUser = mode === "manual"
+                          ? (override.realUser ?? "").trim() || "-"
+                          : fallbackRequestedUser || fallbackCurrentUser || "-";
+                        
+
+                        return (
+                          <tr key={key}>
+                            <td>
+                              <div className="device-overrides-meta">
+                                <strong>{row.deviceId || key}</strong>
+                                {row.categoryName && row.categoryName !== "-" && (
+                                  <span>{row.categoryName}</span>
+                                )}
+                                {row.status && row.status !== "-" && (
+                                  <span className="muted">{row.status}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div
+                                className="device-overrides-project"
+                                ref={(element) => {
+                                  if (element) {
+                                    projectDropdownRefs.current.set(key, element);
+                                  } else {
+                                    projectDropdownRefs.current.delete(key);
+                                  }
+                                }}
+                              >
+                                <div className={`combobox${isOpen ? " open" : ""}`}>
+                                  <button
+                                    type="button"
+                                    className="combobox-trigger"
+                                    onClick={() => toggleDeviceProjectDropdown(key)}
+                                  >
+                                    <span>{projectTriggerLabel}</span>
+                                    <span className="combobox-caret" aria-hidden="true">▾</span>
+                                  </button>
+                                  {isOpen && (
+                                    <div className="combobox-panel combobox-panel--stretch">
+                                      <input
+                                        type="text"
+                                        className="combobox-search combobox-search--full"
+                                        placeholder="프로젝트 이름 또는 코드를 검색하세요"
+                                        value={projectSearchValue}
+                                        onChange={(event) => updateProjectSearchTerm(event.target.value)}
+                                      />
+                                      <ul className="combobox-options combobox-options--scroll">
+                                        <li
+                                          className="combobox-option"
+                                          onClick={() => handleDeviceProjectClear(key)}
+                                        >
+                                          선택 해제
+                                        </li>
+                                        {projectOptions.length === 0 ? (
+                                          <li className="combobox-option" aria-disabled>
+                                            검색 결과가 없습니다.
+                                          </li>
+                                        ) : (
+                                          projectOptions.map((project) => (
+                                            <li
+                                              key={project.code ?? project.id ?? project.name}
+                                              className="combobox-option"
+                                              onClick={() => handleDeviceProjectSelect(key, project)}
+                                            >
+                                              <span className="combobox-option-label">{project.name}</span>
+                                              <span className="combobox-option-description">{project.code || "코드 없음"}</span>
+                                            </li>
+                                          ))
+                                        )}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <select
+                                value={selectedDepartmentName}
+                                onChange={(event) => {
+                                  const nextName = event.target.value;
+                                  const matched = departments.find((department) => department.name === nextName || department.code === nextName);
+                                  updateDeviceOverride(key, {
+                                    departmentName: nextName,
+                                    departmentCode: matched?.code ?? "",
+                                  });
+                                }}
+                              >
+                                {departments.map((department) => (
+                                  <option key={department.id ?? department.code ?? department.name} value={department.name}>
+                                    {department.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <div className="device-overrides-user">
+                                <select
+                                  value={mode}
+                                  onChange={(event) => {
+                                    const nextMode = event.target.value;
+                                    updateDeviceOverride(key, {
+                                      realUserMode: nextMode,
+                                      realUser: nextMode === "manual"
+                                        ? override.realUser ?? fallbackRequestedUser ?? ""
+                                        : "",
+                                    });
+                                  }}
+                                >
+                                  <option value="auto">자동</option>
+                                  <option value="manual">직접 입력</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  value={override.realUser ?? ""}
+                                  onChange={(event) => updateDeviceOverride(key, { realUser: event.target.value })}
+                                  placeholder={mode === "manual" ? "실제 사용자 이름" : "자동 지정"}
+                                  disabled={manualDisabled}
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <div>
+                                  <span className="device-overrides-current-label">프로젝트</span>
+                                  <span className="device-overrides-current-value">{displayProject}</span>
+                                </div>
+                                <div>
+                                  <span className="device-overrides-current-label">부서</span>
+                                  <span className="device-overrides-current-value">{displayDepartment}</span>
+                                </div>
+                                <div>
+                                  <span className="device-overrides-current-label">실제 사용자</span>
+                                  <span className="device-overrides-current-value">{displayRealUser}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-actions">
+                                <button
+                                  type="button"
+                                  className="outline small-button"
+                                  onClick={() => applyOverrideToAll(key)}
+                                >
+                                  전체 적용
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            </>
+          )}
+          {!(isEditing && isReturnRequest) && (
+            <>
+              {isAssociatedDevicesLoading && <p className="muted">선택된 장비 정보를 불러오는 중입니다...</p>}
+              {associatedDevicesError && <p className="error">{associatedDevicesError}</p>}
+              {deviceRows.length > 0 ? (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>관리번호</th>
+                        <th>품목</th>
+                        <th>용도</th>
+                        <th>상태</th>
+                        <th>요청 정보</th>
+                        <th>현재 정보</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deviceRows.map((row) => {
+                        const key = row.deviceId ?? row.key;
+                        const overrideEntry = key != null ? deviceOverrides[String(key)] : null;
+                        const deviceTags = dedupeTagNames(
+                          Array.isArray(overrideEntry?.tags) ? overrideEntry.tags : [],
+                        );
+                        const shouldUseDefaultRequestInfo = isReturnRequest || isDisposalRequest;
+                        const requestedProjectDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_PROJECT
+                          : row.requestedProjectName ?? "-";
+                        const requestedDepartmentDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_DEPARTMENT
+                          : row.requestedDepartmentName ?? "-";
+                        const requestedRealUserDisplay = shouldUseDefaultRequestInfo
+                          ? DEFAULT_METADATA_REAL_USER
+                          : row.requestedRealUser ?? "-";
+                        return (
+                          <tr key={key}>
+                            <td>{row.deviceId ?? "-"}</td>
+                            <td>{row.categoryName ?? "-"}</td>
+                            <td>{row.purpose ?? "-"}</td>
+                            <td>{row.status ?? "-"}</td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <span>프로젝트: {requestedProjectDisplay}</span>
+                                <span>관리부서: {requestedDepartmentDisplay}</span>
+                                <span>실사용자: {requestedRealUserDisplay}</span>
+                                {isReturnRequest && (
+                                  <div className="device-tag-view">
+                                    <span>태그:</span>
+                                    {deviceTags.length > 0 ? (
+                                      <div className="tag-view-list">
+                                        {deviceTags.map((tag) => (
+                                          <span key={`${key}-tag-${tagKey(tag)}`} className="tag-pill">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span>-</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="device-overrides-current">
+                                <span>프로젝트: {row.currentProjectName ?? "-"}</span>
+                                <span>관리부서: {row.currentDepartmentName ?? "-"}</span>
+                                <span>실사용자: {row.currentRealUser ?? "-"}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            </section>
-          )}
-          {isAssociatedDevicesLoading && <p className="muted">선택된 장비 정보를 불러오는 중입니다...</p>}
-          {associatedDevicesError && <p className="error">{associatedDevicesError}</p>}
-          {deviceRows.length > 0 ? (
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>관리번호</th>
-                    <th>품목</th>
-                    <th>용도</th>
-                    <th>상태</th>
-                    <th>요청 정보</th>
-                    <th>현재 정보</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deviceRows.map((row) => {
-                    const key = row.deviceId ?? row.key;
-                    return (
-                      <tr key={key}>
-                        <td>{row.deviceId ?? "-"}</td>
-                        <td>{row.categoryName ?? "-"}</td>
-                        <td>{row.purpose ?? "-"}</td>
-                        <td>{row.status ?? "-"}</td>
-                        <td>
-                          <div className="device-overrides-current">
-                            <span>프로젝트: {row.requestedProjectName ?? "-"}</span>
-                            <span>관리부서: {row.requestedDepartmentName ?? "-"}</span>
-                            <span>실사용자: {row.requestedRealUser ?? "-"}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="device-overrides-current">
-                            <span>프로젝트: {row.currentProjectName ?? "-"}</span>
-                            <span>관리부서: {row.currentDepartmentName ?? "-"}</span>
-                            <span>실사용자: {row.currentRealUser ?? "-"}</span>
-                          </div>
-                        </td>
+              ) : approvalDeviceIds.length > 0 ? (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>관리번호</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : approvalDeviceIds.length > 0 ? (
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>관리번호</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {approvalDeviceIds.map((deviceId) => (
-                    <tr key={deviceId}>
-                      <td>{deviceId}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="muted">연결된 장비 정보가 없습니다.</p>
+                    </thead>
+                    <tbody>
+                      {approvalDeviceIds.map((deviceId) => (
+                        <tr key={deviceId}>
+                          <td>{deviceId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted">연결된 장비 정보가 없습니다.</p>
+              )}
+            </>
           )}
         </div>
 

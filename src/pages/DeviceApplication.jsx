@@ -938,7 +938,6 @@ export default function DeviceApplication() {
                               value={override.departmentName ?? ""}
                               onChange={(event) => updateDeviceOverride(id, { departmentName: event.target.value })}
                             >
-                              <option value="">선택하세요</option>
                               {departments.map((department) => (
                                 <option key={department.id} value={department.name}>
                                   {department.name}

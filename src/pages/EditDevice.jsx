@@ -693,7 +693,6 @@ export default function EditDevice() {
           <label>
             품목
             <select name="category" value={form.category} onChange={handleChange} required>
-              <option value="">선택</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -760,7 +759,6 @@ export default function EditDevice() {
           <label>
             관리부서
             <select name="manageDept" value={form.manageDept} onChange={handleChange}>
-              <option value="">선택</option>
               {departments.map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
@@ -840,7 +838,6 @@ export default function EditDevice() {
           <label>
             용도
             <select name="purpose" value={form.purpose} onChange={handleChange}>
-              <option value="">선택</option>
               <option value="개발">개발</option>
               <option value="사무">사무</option>
             </select>

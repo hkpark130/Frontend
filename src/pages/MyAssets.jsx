@@ -396,7 +396,7 @@ export default function MyAssets() {
             onClick={() => handleBulkAction("return")}
             disabled={selectedDeviceIds.length === 0}
           >
-            일괄 반납
+            반납
           </button>
           <button
             type="button"
@@ -404,7 +404,7 @@ export default function MyAssets() {
             onClick={() => handleBulkAction("disposal")}
             disabled={selectedDeviceIds.length === 0}
           >
-            일괄 폐기
+            폐기
           </button>
         </div>
       </div>
@@ -549,16 +549,19 @@ export default function MyAssets() {
                     >
                       <td>
                         <input
-                          type="checkbox"
-                          className="selection-checkbox"
+                          type="radio"
+                          name={`my-assets-selection-${device.id}`}
+                          className="selection-radio"
                           checked={isSelected}
                           disabled={!canSubmitFollowup}
+                          aria-disabled={!canSubmitFollowup}
                           onClick={(event) => {
                             event.stopPropagation();
                             toggleSelection(device.id, canSubmitFollowup);
                           }}
                           onChange={() => {}}
                           aria-label={`${device.categoryName ?? "장비"} ${device.id} 선택`}
+                          style={{ width: 20, height: 20 }}
                         />
                       </td>
                       <td>{device.categoryName ?? "-"}</td>
@@ -581,30 +584,6 @@ export default function MyAssets() {
                           >
                             비고 수정
                           </button>
-                          {canSubmitFollowup && (
-                            <>
-                              <button
-                                type="button"
-                                className="outline"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(`/mypage/my-assets/${device.id}/return`);
-                                }}
-                              >
-                                반납
-                              </button>
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(`/mypage/my-assets/${device.id}/disposal`);
-                                }}
-                              >
-                                폐기
-                              </button>
-                            </>
-                          )}
                         </div>
                         {!canSubmitFollowup && hasPendingApproval && (
                           <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>

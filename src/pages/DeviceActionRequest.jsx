@@ -74,6 +74,16 @@ const hasTag = (collection, candidate) => {
   return collection.some((item) => tagKey(item) === key);
 };
 
+const RETURN_STATUS_CHOICES = ["정상", "노후"];
+
+const normalizeReturnStatus = (value) => {
+  if (typeof value !== "string") {
+    return RETURN_STATUS_CHOICES[0];
+  }
+  const trimmed = value.trim();
+  return RETURN_STATUS_CHOICES.includes(trimmed) ? trimmed : RETURN_STATUS_CHOICES[0];
+};
+
 const removeTag = (collection, candidate) =>
   collection.filter((item) => tagKey(item) !== tagKey(candidate));
 
@@ -437,8 +447,11 @@ function DeviceActionRequest({ actionType }) {
         const defaultTags = isReturnAction
           ? dedupeTagNames(Array.isArray(detail?.tags) ? detail.tags : [])
           : [];
+        const resolvedStatus = isReturnAction
+          ? normalizeReturnStatus(previous?.status ?? detail?.status)
+          : previous?.status ?? defaultStatus;
         next[idValue] = {
-          status: previous?.status ?? defaultStatus,
+          status: resolvedStatus,
           tags: isReturnAction ? (previous ? previous.tags : defaultTags) : [],
           tagInput: previous?.tagInput ?? "",
         };
@@ -536,7 +549,7 @@ function DeviceActionRequest({ actionType }) {
   };
 
   const handleDeviceStatusChange = (deviceId, value) => {
-    const normalized = typeof value === "string" ? value.trim() : "";
+    const normalized = normalizeReturnStatus(value);
     setDeviceInputs((prev) => {
       const current = prev?.[deviceId];
       if (!current) {
@@ -678,6 +691,36 @@ function DeviceActionRequest({ actionType }) {
         next[id] = {
           ...entry,
           tags: removeTag(entry.tags ?? [], normalized),
+        };
+      });
+      return next;
+    });
+  };
+
+  const applyDeviceSettingsToAll = (deviceId) => {
+    if (!deviceId) {
+      return;
+    }
+    const source = deviceInputs[deviceId];
+    if (!source) {
+      return;
+    }
+    const normalizedTags = dedupeTagNames(source.tags ?? []);
+    const sourceStatus = typeof source.status === "string" ? source.status.trim() : "";
+
+    setDeviceInputs((prev) => {
+      if (!prev || Object.keys(prev).length === 0) {
+        return prev;
+      }
+      const next = {};
+      Object.entries(prev).forEach(([id, entry]) => {
+        if (!entry) {
+          return;
+        }
+        next[id] = {
+          ...entry,
+          status: sourceStatus,
+          tags: [...normalizedTags],
         };
       });
       return next;
@@ -829,7 +872,6 @@ function DeviceActionRequest({ actionType }) {
     try {
       setIsSaving(true);
       await submitDeviceApplication(payload);
-      console.log("디버깅!!!!!!!!!!!!!!!!:", payload);
       const successMessage = targetDeviceIds.length > 1
         ? `선택한 ${targetDeviceIds.length}대 장비의 ${actionType} 신청이 접수되었습니다.`
         : config.successMessage;
@@ -900,7 +942,9 @@ function DeviceActionRequest({ actionType }) {
               <div className="form-section-header">
                 <h3>신청자 정보</h3>
               </div>
-              <div className="form-section-grid applicant-grid">
+              <div
+                className={`form-section-grid applicant-grid${isReturnAction ? " applicant-grid--return" : actionType === "폐기" ? " applicant-grid--disposal" : ""}`}
+              >
                 <div className="applicant-column">
                   <label>
                     사용자
@@ -973,13 +1017,197 @@ function DeviceActionRequest({ actionType }) {
                   </table>
                 </div>
               )}
+              {isReturnAction && targetDeviceIds.length > 0 && (
+                <div className="form-section-subcontent">
+                  <div className="form-section-subheader">
+                    <div>
+                      <h4>장비별 상태 및 태그</h4>
+                      <p className="muted">
+                        각 장비마다 반납 상태와 태그를 조정한 뒤 전체 적용 버튼으로 다른 장비에 복사할 수 있습니다.
+                      </p>
+                    </div>
+                    <div className="tag-meta">
+                      {isTagLoading && (
+                        <span className="tag-status loading">태그를 불러오는 중입니다...</span>
+                      )}
+                      {tagFetchError && <span className="tag-status error">{tagFetchError}</span>}
+                    </div>
+                  </div>
+                  <div className="table-wrapper table-wrapper--device-overrides">
+                    <div className="table-wrapper__scroll">
+                      <table className="device-overrides-table device-action-table">
+                        <thead>
+                          <tr>
+                            <th>장비 정보</th>
+                            <th>현재 정보</th>
+                            <th>장비 상태</th>
+                            <th>태그</th>
+                            <th>작업</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {targetDeviceIds.map((id) => {
+                            const detail = deviceMap.get(id);
+                            const entry = deviceInputs[id] ?? { status: "", tags: [], tagInput: "" };
+                            const currentStatus = detail?.status ?? "-";
+                            const tagInputValue = entry.tagInput ?? "";
+                            const deviceTags = Array.isArray(entry.tags) ? entry.tags : [];
+                            return (
+                              <tr key={id}>
+                                <td>
+                                  <div className="device-overrides-meta">
+                                    <strong>{detail?.categoryName ?? `장비 ${id}`}</strong>
+                                    <span>{id}</span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="device-overrides-current">
+                                    <div>
+                                      <span className="device-overrides-current-label">현재 상태</span>
+                                      <span className="device-overrides-current-value">{currentStatus}</span>
+                                    </div>
+                                    <div>
+                                      <span className="device-overrides-current-label">프로젝트</span>
+                                      <span className="device-overrides-current-value">{detail?.projectName ?? "-"}</span>
+                                    </div>
+                                    <div>
+                                      <span className="device-overrides-current-label">관리부서</span>
+                                      <span className="device-overrides-current-value">{detail?.manageDepName ?? "-"}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <select
+                                    className="status-select"
+                                    value={entry.status}
+                                    onChange={(event) => handleDeviceStatusChange(id, event.target.value)}
+                                  >
+                                    {RETURN_STATUS_CHOICES.map((option) => (
+                                      <option key={`${id}-status-${option}`} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td>
+                                  <div className="tag-section">
+                                    <div className="tag-input-row">
+                                      <input
+                                        type="text"
+                                        value={tagInputValue}
+                                        onChange={(event) => handleDeviceTagInputChange(id, event.target.value)}
+                                        onKeyDown={handleDeviceTagInputKeyDown(id)}
+                                        placeholder="태그를 입력하고 Enter 키 또는 추가 버튼을 눌러주세요."
+                                      />
+                                      <button
+                                        type="button"
+                                        className="outline tag-add-button"
+                                        onClick={() => handleDeviceTagSubmit(id)}
+                                        disabled={!normalizeTagName(tagInputValue)}
+                                      >
+                                        태그 추가
+                                      </button>
+                                    </div>
+                                    <div className="tag-view-list">
+                                      {deviceTags.length === 0 ? (
+                                        <span className="tag-status muted">선택된 태그가 없습니다.</span>
+                                      ) : (
+                                        deviceTags.map((tag) => {
+                                          const normalizedTag = normalizeTagName(tag);
+                                          if (!normalizedTag) {
+                                            return null;
+                                          }
+                                          return (
+                                            <div
+                                              key={`${id}-selected-${tagKey(normalizedTag)}`}
+                                              className="tag-chip selected"
+                                            >
+                                              <span className="tag-label">{normalizedTag}</span>
+                                              <button
+                                                type="button"
+                                                className="remove-btn"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  removeDeviceTag(id, normalizedTag);
+                                                }}
+                                                aria-label={`태그 ${normalizedTag} 삭제`}
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                    {tagOptions.length > 0 && (
+                                      <div className="tag-options">
+                                        {tagOptions.map((option) => {
+                                          const normalized = normalizeTagName(option);
+                                          if (!normalized) {
+                                            return null;
+                                          }
+                                          const selected = hasTag(deviceTags, normalized);
+                                          return (
+                                            <div
+                                              key={`${id}-option-${tagKey(normalized)}`}
+                                              className={`tag-chip${selected ? " selected" : ""}`}
+                                              onClick={() => toggleDeviceTagSelection(id, normalized)}
+                                              role="button"
+                                              tabIndex={0}
+                                              aria-pressed={selected}
+                                              onKeyDown={(event) => {
+                                                if (event.key === "Enter" || event.key === " ") {
+                                                  event.preventDefault();
+                                                  toggleDeviceTagSelection(id, normalized);
+                                                }
+                                              }}
+                                            >
+                                              <span className="tag-label">{normalized}</span>
+                                              <button
+                                                type="button"
+                                                className="remove-btn"
+                                                onClick={(ev) => {
+                                                  ev.stopPropagation();
+                                                  handleRemoveTagOption(normalized);
+                                                }}
+                                                aria-label={`태그 ${normalized} 삭제`}
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="device-overrides-actions">
+                                    <button
+                                      type="button"
+                                      className="outline small-button"
+                                      onClick={() => applyDeviceSettingsToAll(id)}
+                                    >
+                                      전체 적용
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="form-section">
               <div className="form-section-header">
                 <h3>요청 상세</h3>
               </div>
-              <div className="form-section-grid status-grid">
+              <div className={`form-section-grid status-grid${isReturnAction ? " status-grid--return" : ""}`}>
                 {!isReturnAction && (
                   <label>
                     {config.statusLabel}
@@ -1021,137 +1249,6 @@ function DeviceActionRequest({ actionType }) {
               </div>
             </section>
 
-            {isReturnAction && (
-              <section className="form-section">
-                <div className="form-section-header">
-                  <h3>장비별 상태 및 태그</h3>
-                  <div className="tag-meta">
-                    {isTagLoading && (
-                      <span className="tag-status loading">태그를 불러오는 중입니다...</span>
-                    )}
-                    {tagFetchError && <span className="tag-status error">{tagFetchError}</span>}
-                  </div>
-                </div>
-                <div className="device-return-list">
-                  {targetDeviceIds.map((id) => {
-                    const detail = deviceMap.get(id);
-                    const entry = deviceInputs[id] ?? { status: "", tags: [], tagInput: "" };
-                    const statusChoices = ["정상", "노후"];
-                    return (
-                      <div className="device-return-item" key={id}>
-                        <div className="device-return-item__header">
-                          <strong>{detail?.categoryName ?? "장비"}</strong>
-                          <span className="muted">관리번호 {id}</span>
-                        </div>
-                        <div className="device-return-item__content">
-                          <div className="device-return-item__row">
-                            <span className="device-return-item__label">장비 상태</span>
-                            <div className="status-radio-group">
-                              {statusChoices.map((opt) => (
-                                <label key={opt} className="status-radio">
-                                  <input
-                                    type="radio"
-                                    name={`device-status-${id}`}
-                                    value={opt}
-                                    checked={entry.status === opt}
-                                    onChange={() => handleDeviceStatusChange(id, opt)}
-                                    className="status-radio-input"
-                                  />
-                                  {opt}
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="device-return-item__row">
-                            <span className="device-return-item__label">태그</span>
-                            <div className="tag-section">
-                              <div className="tag-input-row">
-                                <input
-                                  type="text"
-                                  value={entry.tagInput}
-                                  onChange={(event) => handleDeviceTagInputChange(id, event.target.value)}
-                                  onKeyDown={handleDeviceTagInputKeyDown(id)}
-                                  placeholder="태그를 입력하고 Enter 키 또는 추가 버튼을 눌러주세요."
-                                />
-                                <button
-                                  type="button"
-                                  className="outline tag-add-button"
-                                  onClick={() => handleDeviceTagSubmit(id)}
-                                  disabled={!normalizeTagName(entry.tagInput)}
-                                >
-                                  태그 추가
-                                </button>
-                              </div>
-                              <div className="selected-tag-list">
-                                {entry.tags && entry.tags.length > 0 ? (
-                                  entry.tags.map((tag) => (
-                                    <span key={`${tagKey(tag)}-${id}`} className="tag-chip selected">
-                                      <span className="tag-label">{tag}</span>
-                                      <button
-                                        type="button"
-                                        className="remove-btn"
-                                        onClick={() => removeDeviceTag(id, tag)}
-                                        aria-label={`태그 ${tag} 삭제`}
-                                      >
-                                        ×
-                                      </button>
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="tag-status muted">선택된 태그가 없습니다.</span>
-                                )}
-                              </div>
-                              <div className="tag-options">
-                                {tagOptions.length === 0 ? (
-                                  <span className="tag-status muted">표시할 태그가 없습니다.</span>
-                                ) : (
-                                  tagOptions.map((option) => {
-                                    const normalized = normalizeTagName(option);
-                                    if (!normalized) {
-                                      return null;
-                                    }
-                                    const selected = hasTag(entry.tags ?? [], normalized);
-                                    return (
-                                      <div
-                                        key={`${tagKey(normalized)}-${id}`}
-                                        className={`tag-chip${selected ? " selected" : ""}`}
-                                        onClick={() => toggleDeviceTagSelection(id, normalized)}
-                                        role="button"
-                                        tabIndex={0}
-                                        aria-pressed={selected}
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter" || event.key === " ") {
-                                            event.preventDefault();
-                                            toggleDeviceTagSelection(id, normalized);
-                                          }
-                                        }}
-                                      >
-                                        <span className="tag-label">{normalized}</span>
-                                        <button
-                                          type="button"
-                                          className="remove-btn"
-                                          onClick={(ev) => {
-                                            ev.stopPropagation();
-                                            handleRemoveTagOption(normalized);
-                                          }}
-                                          aria-label={`태그 ${normalized} 삭제`}
-                                        >
-                                          ×
-                                        </button>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
 
             <section className="form-section">
               <div className="form-section-header">
