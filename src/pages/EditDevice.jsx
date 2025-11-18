@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchProjects, fetchDeviceDetail, updateDevice } from '@/api/devices';
+import { fetchDeviceDetail, updateDevice } from '@/api/devices';
+import { fetchProjects } from '@/api/projects';
 import { fetchCategories } from '@/api/categories';
 import { fetchDepartments } from '@/api/departments';
 import { lookupKeycloakUser } from '@/api/users';

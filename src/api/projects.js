@@ -1,5 +1,10 @@
 import api from './api';
 
+export const fetchProjects = async () => {
+  const { data } = await api.get('/api/projects');
+  return data;
+};
+
 export const getProjectByCode = async (code) => {
   const { data } = await api.get(`/api/projects/code/${encodeURIComponent(code)}`);
   return data;

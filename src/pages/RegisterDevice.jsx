@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchProjects } from "@/api/devices";
+import { fetchProjects } from "@/api/projects";
 import { fetchCategories } from "@/api/categories";
 import { fetchDepartments } from "@/api/departments";
 import ProjectCombobox from "@/components/form/ProjectCombobox";

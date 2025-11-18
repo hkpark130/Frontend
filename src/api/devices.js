@@ -94,7 +94,3 @@ export const fetchDepartments = async () => {
   return data;
 };
 
-export const fetchProjects = async () => {
-  const { data } = await api.get("/api/projects");
-  return data;
-};

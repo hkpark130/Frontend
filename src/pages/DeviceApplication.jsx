@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { format, isValid } from "date-fns";
+import { addDays, format, isValid } from "date-fns";
 import "dayjs/locale/ko";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import {
   fetchDepartments,
   fetchDeviceDetail,
-  fetchProjects,
   submitDeviceApplication,
 } from "@/api/devices";
+import { fetchProjects } from "@/api/projects";
 import { useUser } from "@/context/UserProvider";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { fetchDefaultApprovers } from "@/api/approvals";
@@ -32,6 +32,8 @@ const extractDateString = (value) => {
 
 const normalizeName = (value) => (typeof value === "string" ? value.trim() : "");
 
+const defaultDeadlineDate = () => toDateString(addDays(new Date(), 7));
+
 const initialPayload = (deviceId, userName) => ({
   deviceId,
   userName,
@@ -45,7 +47,7 @@ const initialPayload = (deviceId, userName) => ({
   isUsable: false,
   usageStartDate: "",
   usageEndDate: "",
-  deadlineDate: toDateString(new Date()),
+  deadlineDate: defaultDeadlineDate(),
   description: "",
   categoryName: "",
   approvers: [],

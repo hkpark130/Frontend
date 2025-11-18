@@ -11,7 +11,8 @@ import {
   updateApprovalApplication,
 } from "@/api/approvals";
 import { useUser } from "@/context/UserProvider";
-import { fetchDepartments, fetchProjects, fetchDeviceDetail } from "@/api/devices";
+import { fetchDepartments, fetchDeviceDetail } from "@/api/devices";
+import { fetchProjects } from "@/api/projects";
 import { fetchTags } from "@/api/tags";
 import { RangeDateInput, DeadlineDateField } from "@/components/form/DateInputs";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";

@@ -34,9 +34,11 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <picture>
-          <img src="/images/Logo_direa.png" alt="DIREA" className="brand-logo" />
-        </picture>
+        <NavLink to="/" end className="brand-link">
+          <picture>
+            <img src="/images/Logo_direa.png" alt="DIREA" className="brand-logo" />
+          </picture>
+        </NavLink>
       </div>
       <nav className="nav-section">
         <NavLink to="/" end className={menuClass}>대시보드</NavLink>

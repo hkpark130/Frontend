@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import "dayjs/locale/ko";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { fetchDeviceDetail, fetchDevicesByIds, submitDeviceApplication } from "@/api/devices";
 import { fetchDefaultApprovers } from "@/api/approvals";
 import { fetchTags } from "@/api/tags";
@@ -127,7 +127,7 @@ function DeviceActionRequest({ actionType }) {
     );
   }, [user]);
 
-  const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const defaultDeadlineDate = useMemo(() => format(addDays(new Date(), 7), "yyyy-MM-dd"), []);
 
   const [selectedDevices, setSelectedDevices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -220,7 +220,7 @@ function DeviceActionRequest({ actionType }) {
   const [form, setForm] = useState(() => ({
     reason: "",
     description: "",
-    deadlineDate: today,
+    deadlineDate: defaultDeadlineDate,
     // 액션 타입에 따라 기본 상태 지정 (폐기는 '폐기'로 고정)
     status: actionType === "폐기" ? "폐기" : config?.defaultStatus ?? "",
   }));
@@ -236,11 +236,11 @@ function DeviceActionRequest({ actionType }) {
       ...prev,
       reason: "",
       description: "",
-      deadlineDate: today,
+      deadlineDate: defaultDeadlineDate,
       status: actionType === "폐기" ? "폐기" : config?.defaultStatus ?? "",
     }));
     setPrefilled(false);
-  }, [actionType, config?.defaultStatus, derivedDeviceIds, today]);
+  }, [actionType, config?.defaultStatus, derivedDeviceIds, defaultDeadlineDate]);
 
   useEffect(() => {
     if (!isReturnAction) {

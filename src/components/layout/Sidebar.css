@@ -86,14 +86,6 @@
   border-radius: 0;
 }
 
-.brand-logo {
-  display: block;
-  max-width: 120px;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-}
-
 .openstack-link {
   display: flex;
   align-items: center;
@@ -109,4 +101,23 @@
 
 .menu-toggle .openstack-nav-icon {
   margin-right: 8px;
+}
+
+.brand-link {
+  display: inline-block; /* transform 적용 위해 필요할 수 있음 */
+  transition: transform 0.25s ease-in-out; /* 자연스러운 확대 애니메이션 */
+}
+
+.brand-link:hover {
+  transform: scale(1.05); /* 마우스 오버 시 로고 살짝 커지게 */
+}
+
+/* 기존 로고 스타일 */
+.brand-logo {
+  display: block;
+  max-width: 120px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  position: relative;
 }
